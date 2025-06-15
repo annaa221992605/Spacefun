@@ -1,2 +1,3 @@
 # Spacefun
-Space
+
+Polygence project to simulate hybrid propulsion systems
