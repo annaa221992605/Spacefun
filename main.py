@@ -6,7 +6,6 @@ def main():
     # Main function
     print("Starting Main Function")
     initial_position = np.array([7000,0,0])
-
     initial_velocity = np.array([0, 7.72, 5])
     integration_time = 24*60*60
     integration_steps = 1000                                                                   
