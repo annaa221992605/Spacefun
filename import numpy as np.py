@@ -38,7 +38,7 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
     #initial orbit propagrator
 
     initr1=np.array([r1, 0, 0])
-    initv1=np.array({0, v1, 0})
+    initv1=np.array([0, v1, 0])
 
     traj1, times = keplerian_propagator(initr1, initv1, 2*np.pi*np.sqrt(r1**3/grav), integration_steps)
 
@@ -50,8 +50,8 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
 
     #target circular orbit propagation
 
-    initr2=np.array([r2, 0, 0])
-    initv2 = np.array({0, v2, 0})
+    initr2=np.array([-r2, 0, 0])
+    initv2 = np.array([0, v2, 0])
 
     traj2, times = keplerian_propagator(initr2, initv2,2*np.pi*np.sqrt(r2**3/grav), integration_steps)
 
@@ -74,7 +74,7 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
     #desired
     ax.plot(traj2[0],traj2[1],traj2[2],zorder=5)
 
-    #marking important parts
+    #marking  center
     ax.scatter([0], [0], [0], color='red', s=100, label='Centeral body')
 
 
