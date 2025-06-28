@@ -5,14 +5,14 @@ from scipy.integrate import solve_ivp
 def main():
     # Main function
     print("Starting Main Function")
-    initial_position = np.array([7000,0,0])#x, y, z
-    initial_velocity = np.array([0, 7.72, 5])#velocity (vx, vy, vz)
-    integration_time = 24*60*60 #24 hrs in seconds
-    integration_steps = 1000   #number of points generated                                                                
+    initial_position = np.array([7000,0,0])
+    initial_velocity = np.array([0, 7.72, 5])
+    integration_time = 24*60*60
+    integration_steps = 1000                                                                   
 
-    trajectory, times = keplerian_propagator(initial_position, initial_velocity, integration_time, integration_steps)#propagate orbit
+    trajectory, times = keplerian_propagator(initial_position, initial_velocity, integration_time, integration_steps)
 
-    # Plot it in 3D
+    # Plot it
     fig = plt.figure()
     # Define axes in that figure
     ax = plt.axes(projection='3d',computed_zorder=False)
