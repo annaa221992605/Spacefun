@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+from shooting import high_thrust_targeter
 
 def hohmannTransfer(r1, r2, grav = 398600.4418):
     # Main function
@@ -42,6 +43,11 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
 
     initr1=np.array([r1, 0, 0])
     initv1=np.array([0, v1, 0])
+
+    # Pass initial guess to targetter
+    # high_thrust_targeter(x0, y0, xdot0, ydot0, DVx, DVy, xf, yf, xdotf, ydotf,tof)
+    
+    high_thrust_targeter(r1, 0, 0, v1+delta_v1, 0, -delta_v2, -r2, 0, 0, -v2, Tof)
 
     traj1, times = keplerian_propagator(initr1, initv1, 2*np.pi*np.sqrt(r1**3/grav), integration_steps)
 
