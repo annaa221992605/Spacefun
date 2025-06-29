@@ -32,9 +32,12 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
     #deltav calculations
 
     delta_v1 = vTransferPeri - v1
-    dalta_v2 = v2 - vTransferApo
-    totalDeltaV = delta_v1+dalta_v2
-
+    delta_v2 = v2 - vTransferApo
+    totalDeltaV = delta_v1+delta_v2
+    print("---------------------------")
+    print("DV 1 = ", delta_v1)
+    print("DV 2 = ", delta_v2)
+    print("---------------------------")
     #initial orbit propagrator
 
     initr1=np.array([r1, 0, 0])
@@ -129,4 +132,4 @@ def keplerian_eoms(t, state):
 
 
 if __name__ == '__main__':
-    hohmannTransfer(3000, 9000)
+    hohmannTransfer(8000, 12000)
