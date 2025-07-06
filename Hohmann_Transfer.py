@@ -44,24 +44,36 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
     initr1=np.array([r1, 0, 0])
     initv1=np.array([0, v1, 0])
 
-    # Pass initial guess to targetter
-    # high_thrust_targeter(x0, y0, xdot0, ydot0, DVx, DVy, xf, yf, xdotf, ydotf,tof)
-    
-    high_thrust_targeter(r1, 0, 0, v1+delta_v1, 0, -delta_v2, -r2, 0, 0, -v2, Tof)
-
-    traj1, times = keplerian_propagator(initr1, initv1, 2*np.pi*np.sqrt(r1**3/grav), integration_steps)
-
+    isp = 19000
+    m0 = 4.800
     #transfer Orbits initial values
     init_r_transfer = np.array([r1, 0, 0])
     init_v_transfer = np.array([0, vTransferPeri, 0])
 
+    # Low thrust propagator
+    low_thrust_traj, times = low_thrust_propagator(init_r_transfer, init_v_transfer-[0.0,0.5,0.0], 10*Tof, integration_steps, isp, m0)
+
+    # Pass initial guess to targetter
+    # high_thrust_targeter(x0, y0, xdot0, ydot0, DVx, DVy, xf, yf, xdotf, ydotf,tof)
+    """
+    free_vector = high_thrust_targeter(r1, 0, 0, v1+delta_v1, 0, -delta_v2, -r2, 0, 0, -v2, Tof)
+    print("Diff in initial x dot ", 0-free_vector[0])
+    print("Diff in initial y dot ", v1+delta_v1-free_vector[1])
+    print("Diff in initial time ", Tof-free_vector[2])
+    print("Diff in final DV X ", 0-free_vector[3])
+    print("Diff in final DV y ", -delta_v2-free_vector[4])
+    """
+    # Init Orbit
+    traj1, times = keplerian_propagator(initr1, initv1, 2*np.pi*np.sqrt(r1**3/grav), integration_steps)
+
+    # Transfer
     traj_transfer, times = keplerian_propagator(init_r_transfer, init_v_transfer,Tof, integration_steps)
 
     #target circular orbit propagation
 
     initr2=np.array([-r2, 0, 0])
     initv2 = np.array([0, v2, 0])
-
+    # Target Orbit
     traj2, times = keplerian_propagator(initr2, initv2,2*np.pi*np.sqrt(r2**3/grav), integration_steps)
 
 
@@ -80,6 +92,8 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
     ax.plot(traj1[0],traj1[1],traj1[2],zorder=5)
     #transfer
     ax.plot(traj_transfer[0],traj_transfer[1],traj_transfer[2],zorder=5)
+    # Low thrust traj
+    ax.plot(low_thrust_traj[0],low_thrust_traj[1],low_thrust_traj[2],zorder=5)
     #desired
     ax.plot(traj2[0],traj2[1],traj2[2],zorder=5)
 
@@ -96,6 +110,52 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
     ax.zaxis.set_tick_params(labelsize=7)
     ax.set_aspect('equal', adjustable='box')
     plt.show()
+
+def low_thrust_propagator(init_r, init_v, tof, steps, isp, m0):
+    """
+    Function to propagate a given orbit
+    """
+    # Time vector
+    tspan = [0, tof]
+
+    # Array of time values
+    tof_array = np.linspace(0,tof, num=steps)
+    init_state = np.append(init_r,np.append(init_v,m0))
+    # Do the integration
+    sol = solve_ivp(fun = lambda t,x:low_thrust_eoms(t,x,isp), t_span=tspan, y0=init_state, method="DOP853", t_eval=tof_array, rtol = 1e-12, atol = 1e-12)
+
+    # Return everything
+    return sol.y, sol.t
+
+def low_thrust_eoms(t, state, isp):
+    """
+    Equation of motion for 2body orbits
+    """
+    earth_nu = 398600.441500000
+    g0 = 9.81
+    # Extract values from init
+    x, y, z, vx, vy, vz, mass = state
+    r_dot = np.array([vx, vy, vz])
+    
+    # Define r
+    r = np.linalg.norm([x, y, z])
+
+    force = 1
+    accel_mag = (force/mass) * 1e-3
+
+    # Solve for the acceleration
+    ax = - (earth_nu/r**3) * x + (vx/np.linalg.norm(r_dot))*accel_mag
+    ay = - (earth_nu/r**3) * y + (vy/np.linalg.norm(r_dot))*accel_mag
+    az = - (earth_nu/r**3) * z + (vz/np.linalg.norm(r_dot))*accel_mag
+
+    m_dot = -force/(isp*g0)
+
+    v_dot = np.array([ax, ay, az])
+
+    dx = np.append(r_dot, np.append(v_dot, m_dot))
+
+    return dx
+
 
 def keplerian_propagator(init_r, init_v, tof, steps):
     """
