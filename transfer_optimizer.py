@@ -21,6 +21,17 @@ def obj_func(free_vector):
     # 1. Apply DV to the initial state
     # dv1 = difference using initial state
     # solve for m1_diff using rocket equation
+
+    DV1=np.array([DVx, DVy])
+    #initial delta v
+    DV1_mag = np.linalg.norm(DV1)
+
+    
+
+
+
+
+
     # 2. Propagate the state using LT EOM
     # Gives delta m2
     # 3. Get final state at target orbit
