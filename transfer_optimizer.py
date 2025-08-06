@@ -26,7 +26,14 @@ def obj_func(free_vector):
     #initial delta v
     DV1_mag = np.linalg.norm(DV1)
 
-    
+    v0 = np.array([vx0, vy0])         # Pre-burn velocity
+    v_after_dv1 = v0 + DV1
+
+    g0 = 9.80665
+
+    m1_diff = m0 * np.exp(-DV1_mag / (Isp * g0))
+
+
 
 
 
@@ -34,6 +41,9 @@ def obj_func(free_vector):
 
     # 2. Propagate the state using LT EOM
     # Gives delta m2
+
+    
+
     # 3. Get final state at target orbit
     # dv2 = difference in final states
     # solve for m3_diff using rocket equation
