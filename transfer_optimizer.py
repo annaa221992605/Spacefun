@@ -32,22 +32,24 @@ def obj_func(free_vector):
     g0 = 9.80665
 
     m1_diff = m0 * np.exp(-DV1_mag / (Isp * g0))
-
-
-
-
-
-
+    m1= m0+m1_diff
 
     # 2. Propagate the state using LT EOM
     # Gives delta m2
-
-    
+    LTtraj, times = low_thrust_propagator_2D(init_r, init_v, tof, 1000, isp, m0)
+    #final mass on 4th row, last collumn
+    m2 = LTtraj[4, -1]
+    delta_m2 = m1-m2
 
     # 3. Get final state at target orbit
     # dv2 = difference in final states
-    # solve for m3_diff using rocket equation
-    # Total mass change = m1_diff + m2 + m3_diff
+
+    xf, yf, vxf, vyf, mf = LTtraj[0, -1], LTtraj[1, -1], LTtraj[2, -1], LTtraj[3,-1], LTtraj[4,-1]
+
+    #whats the target?
+    
+    # solve for m3_diff using rock et equation
+    Totalmasschange = m1_diff + m2 + m3_diff
     """
     Example way
     vx0, vy0, tof, DVx, DVy = p
