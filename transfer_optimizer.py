@@ -6,7 +6,7 @@ from Hohmann_Transfer import low_thrust_propagator
 from scipy.optimize import minimize, NonlinearConstraint
 
 
-def optimize_transfer(initial_guess):
+def optimize_transfer(initial_guess, r0, m0, T, Isp, mu):#does the initial guess include these
     """
     function to opimize transfer
     """
@@ -14,13 +14,15 @@ def optimize_transfer(initial_guess):
     sol = minimize(obj_func, initial_guess, args=(r0, m0, T, Isp, mu),
                constraints=[nlc],
                method='SLSQP', options={'ftol':1e-10, 'maxiter':100})
+    return sol
 
-
-def obj_func(free_vector):
+def obj_func(free_vector):#should there be a target array passed in
     total_mass_change = 0
     # 1. Apply DV to the initial state
     # dv1 = difference using initial state
     # solve for m1_diff using rocket equation
+
+    vx0, vy0, tof, DVx, DVy = free_vector[:5]
 
     DV1=np.array([DVx, DVy])
     #initial delta v
@@ -31,14 +33,14 @@ def obj_func(free_vector):
 
     g0 = 9.80665
 
-    m1_diff = m0 * np.exp(-DV1_mag / (Isp * g0))
-    m1= m0+m1_diff
+    m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
+    delta_m1= m0-m1
 
     # 2. Propagate the state using LT EOM
     # Gives delta m2
-    state0 = np.hstack((r0, [vx0, vy0, m0]))
+    state0 = np.hstack((r0, [vx0, vy0, m0]))#what was the point of this
 
-    LTtraj, times = low_thrust_propagator(r0, [vx0, vy0], tof, 1000, isp, m0)
+    LTtraj, times = low_thrust_propagator(r0, v_after_dv1, tof, 1000, Isp, m1)
     #final mass on 4th row, last collumn
     m2 = LTtraj[4, -1]
     delta_m2 = m1-m2
@@ -52,14 +54,16 @@ def obj_func(free_vector):
     
     # solve for m3_diff using rocket equation
 
+    target_vx, target_vy = #where should I get this
+
     DV2=np.array([target_vx - vxf, target_vy - vyf])#target velocities where
     #initial delta v
     DV2_mag = np.linalg.norm(DV2)
 
-    mf_after = mf * np.exp(-DV2_mag / (Isp * g0))
-    m3_diff = mf - mf_after
+    mf_after = mf * np.exp(-DV2_mag / (Isp * g0)) #is mf and m2 are the same (both 4, -1)
+    delta_m3 = mf - mf_after
 
-    total_mass_change = m1_diff + m2 + m3_diff
+    total_mass_change = delta_m1 + delta_m2 + delta_m3
     """
     Example way
     vx0, vy0, tof, DVx, DVy = p
@@ -108,7 +112,7 @@ def jacobian(p, r0, m0, target, T, Isp, mu=398600.4415):
     r_f = np.hypot(x_f, y_f)
     m_f = traj[4, -1]
     a_f  = -mu*np.array([x_f, y_f])/r_f**3 + (T/m_f)*np.array([vx_f, vy_f])/np.hypot(vx_f, vy_f)
-
+#missing parts of j?
     J = np.zeros((4, 5))
     J[0:2, 0:2] = Phi_rv          # wrt vx0, vy0
     J[2:4, 0:2] = Phi_vv
@@ -116,9 +120,12 @@ def jacobian(p, r0, m0, target, T, Isp, mu=398600.4415):
     J[1, 2] = vy_f
     J[2, 2] = a_f[0]
     J[3, 2] = a_f[1]
+    J[2,3]=1.0
+    J[3, 4]=1.0
 
     stm = Phi
     # deriv of first row
+    #what is the pupose of FX?
     FX[0, 0:2] = stm[0,2:4]
     FX[0,2] = vx_f
     # End of row is zeros
@@ -141,3 +148,6 @@ def constraint_fun(p, r0, m0, target, T, Isp, mu):
 
 def constraint_jac(p, r0, m0, target, T, Isp, mu):
     return jacobian(p, r0, m0, target, T, Isp, mu=mu)
+
+
+
