@@ -36,7 +36,9 @@ def obj_func(free_vector):
 
     # 2. Propagate the state using LT EOM
     # Gives delta m2
-    LTtraj, times = low_thrust_propagator_2D(init_r, init_v, tof, 1000, isp, m0)
+    state0 = np.hstack((r0, [vx0, vy0, m0]))
+
+    LTtraj, times = low_thrust_propagator(r0, [vx0, vy0], tof, 1000, isp, m0)
     #final mass on 4th row, last collumn
     m2 = LTtraj[4, -1]
     delta_m2 = m1-m2
@@ -48,8 +50,16 @@ def obj_func(free_vector):
 
     #whats the target?
     
-    # solve for m3_diff using rock et equation
-    Totalmasschange = m1_diff + m2 + m3_diff
+    # solve for m3_diff using rocket equation
+
+    DV2=np.array([target_vx - vxf, target_vy - vyf])#target velocities where
+    #initial delta v
+    DV2_mag = np.linalg.norm(DV2)
+
+    mf_after = mf * np.exp(-DV2_mag / (Isp * g0))
+    m3_diff = mf - mf_after
+
+    total_mass_change = m1_diff + m2 + m3_diff
     """
     Example way
     vx0, vy0, tof, DVx, DVy = p
