@@ -60,7 +60,7 @@ def obj_func(free_vector):#should there be a target array passed in
     #initial delta v
     DV2_mag = np.linalg.norm(DV2)
 
-    mf_after = mf * np.exp(-DV2_mag / (Isp * g0)) #is mf and m2 are the same (both 4, -1)
+    mf_after = mf * np.exp(-DV2_mag / (Isp * g0)) #mf and m2 are the same (both 4, -1)
     delta_m3 = mf - mf_after
 
     total_mass_change = delta_m1 + delta_m2 + delta_m3
@@ -149,5 +149,14 @@ def constraint_fun(p, r0, m0, target, T, Isp, mu):
 def constraint_jac(p, r0, m0, target, T, Isp, mu):
     return jacobian(p, r0, m0, target, T, Isp, mu=mu)
 
+r0 = 7000
+m0=1000
+T=0.5
+Isp=3000
+mu=398600.0
 
+target = 
+initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
 
+sol=optimize_transfer(initial_guess, r0, m0, T, Isp, mu)
+print(sol)
