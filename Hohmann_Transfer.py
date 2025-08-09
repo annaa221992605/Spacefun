@@ -165,7 +165,7 @@ def keplerian_propagator(init_r, init_v, tof, steps):
     tspan = [0, tof]
 
     # Array of time values
-    tof_array = np.linspace(0,tof, num=steps)
+    tof_array = np.linspace(0,tof, num=steps) #number of times all the variable is calculated=1000
     init_state = np.concatenate((init_r,init_v))
     # Do the integration
     sol = solve_ivp(fun = lambda t,x:keplerian_eoms(t,x), t_span=tspan, y0=init_state, method="DOP853", t_eval=tof_array, rtol = 1e-12, atol = 1e-12)

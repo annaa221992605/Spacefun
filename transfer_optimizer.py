@@ -16,7 +16,7 @@ def optimize_transfer(initial_guess, r0, m0, T, Isp, mu):#does the initial guess
                method='SLSQP', options={'ftol':1e-10, 'maxiter':100})
     return sol
 
-def obj_func(free_vector):#should there be a target array passed in
+def obj_func(free_vector):#should there be a target array passed in - is the target values coming from shooting method
     total_mass_change = 0
     # 1. Apply DV to the initial state
     # dv1 = difference using initial state
@@ -38,9 +38,11 @@ def obj_func(free_vector):#should there be a target array passed in
 
     # 2. Propagate the state using LT EOM
     # Gives delta m2
+
+    #hstack=horizontal
     state0 = np.hstack((r0, [vx0, vy0, m0]))#what was the point of this
 
-    LTtraj, times = low_thrust_propagator(r0, v_after_dv1, tof, 1000, Isp, m1)
+    LTtraj, times = low_thrust_propagator(r0, v_after_dv1, tof, 1000, Isp, m1) #tof between the first burn and the second
     #final mass on 4th row, last collumn
     m2 = LTtraj[4, -1]
     delta_m2 = m1-m2
@@ -48,7 +50,9 @@ def obj_func(free_vector):#should there be a target array passed in
     # 3. Get final state at target orbit
     # dv2 = difference in final states
 
-    xf, yf, vxf, vyf, mf = LTtraj[0, -1], LTtraj[1, -1], LTtraj[2, -1], LTtraj[3,-1], LTtraj[4,-1]
+    #setting mf = to the mass after second burn
+    xf, yf, vxf, vyf, mf = LTtraj[0, -1], LTtraj[1, -1], LTtraj[2, -1], LTtraj[3,-1], LTtraj[4,-1] #-1 is the last column (if steps=1000, last column will be 1000)
+
 
     #whats the target?
     
@@ -58,7 +62,7 @@ def obj_func(free_vector):#should there be a target array passed in
 
     DV2=np.array([target_vx - vxf, target_vy - vyf])#target velocities where
     #initial delta v
-    DV2_mag = np.linalg.norm(DV2)
+    DV2_mag = np.linalg.norm(DV2)#pythagorean thoerem
 
     mf_after = mf * np.exp(-DV2_mag / (Isp * g0)) #mf and m2 are the same (both 4, -1)
     delta_m3 = mf - mf_after
