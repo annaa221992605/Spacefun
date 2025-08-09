@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from shooting import high_thrust_targeter
-from Hohmann_Transfer import low_thrust_propagator
+from Hohmann_Transfer import low_thrust_propagator, keplerian_propagator
 from scipy.optimize import minimize, NonlinearConstraint
 
 
@@ -21,7 +21,7 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     # 1. Apply DV to the initial state
     # dv1 = difference using initial state
     # solve for m1_diff using rocket equation
-
+    initr2, initv2, steps = 12000, np.sqrt(mu/initr2), 1000
     vx0, vy0, tof, DVx, DVy = free_vector[:5]
 
     DV1=np.array([DVx, DVy])
@@ -40,7 +40,7 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     # Gives delta m2
 
     #hstack=horizontal
-    state0 = np.hstack((r0, [vx0, vy0, m0]))#what was the point of this
+    #state0 = np.hstack((r0, [vx0, vy0, m0]))#what was the point of this
 
     LTtraj, times = low_thrust_propagator(r0, v_after_dv1, tof, 1000, Isp, m1) #tof between the first burn and the second
     #final mass on 4th row, last collumn
@@ -57,6 +57,7 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     #whats the target?
     
     # solve for m3_diff using rocket equation
+    target, times = keplerian_propagator(initr2, initv2,tof, steps)
 
     target_vx, target_vy = #where should I get this
 
@@ -80,13 +81,16 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     return total_mass_change
 
 
-def residuals(p, r0, m0, target, T, Isp, mu=398600.4415):
+def residuals(p, r0, m0, T, Isp, mu=398600.4415):
     # P is is free vector
     vx0, vy0, tof, DVx, DVy = p
     # propagate the 5-state + STM
     state0 = np.hstack((r0, [vx0, vy0, m0]))
     traj, _ = low_thrust_propagator(state0, tof, T, Isp, mu)   # your routine
     xf, yf, vxf, vyf, _ = traj[:5, -1]
+
+    target_traj, times = keplerian_propagator(initr2, initv2,tof, steps)
+
 
     vxf += DVx
     vyf += DVy
@@ -159,7 +163,8 @@ T=0.5
 Isp=3000
 mu=398600.0
 
-target = 
+#target, times = keplerian_propagator(initr2, initv2,2*np.pi*np.sqrt(r2**3/grav), integration_steps)
+
 initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
 
 sol=optimize_transfer(initial_guess, r0, m0, T, Isp, mu)
