@@ -134,11 +134,11 @@ def low_thrust_eoms(t, state, isp):
     earth_nu = 398600.441500000
     g0 = 9.81
     # Extract values from init
-    x, y, z, vx, vy, vz, mass = state
-    r_dot = np.array([vx, vy, vz])
+    x, y, vx, vy, mass = state
+    r_dot = np.array([vx, vy])
     
     # Define r
-    r = np.linalg.norm([x, y, z])
+    r = np.linalg.norm([x, y])
 
     force = 1
     accel_mag = (force/mass) * 1e-3
@@ -146,11 +146,10 @@ def low_thrust_eoms(t, state, isp):
     # Solve for the acceleration
     ax = - (earth_nu/r**3) * x + (vx/np.linalg.norm(r_dot))*accel_mag
     ay = - (earth_nu/r**3) * y + (vy/np.linalg.norm(r_dot))*accel_mag
-    az = - (earth_nu/r**3) * z + (vz/np.linalg.norm(r_dot))*accel_mag
 
     m_dot = -force/(isp*g0)
 
-    v_dot = np.array([ax, ay, az])
+    v_dot = np.array([ax, ay])
 
     dx = np.append(r_dot, np.append(v_dot, m_dot))
 
@@ -180,17 +179,16 @@ def keplerian_eoms(t, state):
     """
     earth_nu = 398600.441500000
     # Extract values from init
-    x, y, z, vx, vy, vz = state
-    r_dot = np.array([vx, vy, vz])
+    x, y, vx, vy = state
+    r_dot = np.array([vx, vy])
     
     # Define r
-    r = np.linalg.norm([x, y, z])
+    r = np.linalg.norm([x, y])
     # Solve for the acceleration
     ax = - (earth_nu/r**3) * x
     ay = - (earth_nu/r**3) * y
-    az = - (earth_nu/r**3) * z
 
-    v_dot = np.array([ax, ay, az])
+    v_dot = np.array([ax, ay])
 
     dx = np.append(r_dot, v_dot)
 
