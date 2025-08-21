@@ -40,7 +40,7 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     # Gives delta m2
 
     #hstack=horizontal
-    #state0 = np.hstack((r0, [vx0, vy0, m0]))#what was the point of this
+    #state0 = np.hstack((r0, [vx0, vy0, m0]))
 
     LTtraj, times = low_thrust_propagator(r0, v_after_dv1, tof, 1000, Isp, m1) #tof between the first burn and the second
     #final mass on 4th row, last collumn
@@ -166,6 +166,16 @@ mu=398600.0
 #target, times = keplerian_propagator(initr2, initv2,2*np.pi*np.sqrt(r2**3/grav), integration_steps)
 
 initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
+
+plt.figure(figsize=(6, 4))  # Optional: customize the figure size
+plt.xlabel('X-axis')
+plt.ylabel('Y-axis')
+
+plt.title('Empty x-y Axis')
+plt.grid(True)  #show grid
+
+# Define axis
+plt.show()
 
 sol=optimize_transfer(initial_guess, r0, m0, T, Isp, mu)
 print(sol)
