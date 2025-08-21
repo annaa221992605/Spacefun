@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from shooting import high_thrust_targeter
-from Hohmann_Transfer import low_thrust_propagator, keplerian_propagator
+from Hohmann_Transfer import keplerian_propagator
+from LT_Propagator import low_thrust_propagator_2D
 from scipy.optimize import minimize, NonlinearConstraint
 
 
@@ -11,7 +12,8 @@ def optimize_transfer(initial_guess, r0, m0, T, Isp, mu):#does the initial guess
     function to opimize transfer
     """
     nlc = NonlinearConstraint(constraint_fun, 0.0, 0.0, jac=constraint_jac)
-    sol = minimize(obj_func, initial_guess, args=(r0, m0, T, Isp, mu),
+    # Current error is that these arguments are not getting passed correctly
+    sol = minimize(obj_func, initial_guess,
                constraints=[nlc],
                method='SLSQP', options={'ftol':1e-10, 'maxiter':100})
     return sol
@@ -21,7 +23,8 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     # 1. Apply DV to the initial state
     # dv1 = difference using initial state
     # solve for m1_diff using rocket equation
-    initr2, initv2, steps = 12000, np.sqrt(mu/initr2), 1000
+    initr2 = 12000
+    initv2, steps = np.sqrt(mu/initr2), 1000
     vx0, vy0, tof, DVx, DVy = free_vector[:5]
 
     DV1=np.array([DVx, DVy])
@@ -42,7 +45,7 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     #hstack=horizontal
     #state0 = np.hstack((r0, [vx0, vy0, m0]))
 
-    LTtraj, times = low_thrust_propagator(r0, v_after_dv1, tof, 1000, Isp, m1) #tof between the first burn and the second
+    LTtraj, times = low_thrust_propagator_2D([r0,0.0], v_after_dv1, tof, 1000, Isp, m1) #tof between the first burn and the second
     #final mass on 4th row, last collumn
     m2 = LTtraj[4, -1]
     delta_m2 = m1-m2
@@ -57,9 +60,9 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     #whats the target?
     
     # solve for m3_diff using rocket equation
-    target, times = keplerian_propagator(initr2, initv2,tof, steps)
+    target_traj, times = keplerian_propagator([initr2,0.0], [0.0,initv2],tof, steps)
 
-    target_vx, target_vy = #where should I get this
+    target_vx, target_vy = target_traj[2:4,-1] #where should I get this
 
     DV2=np.array([target_vx - vxf, target_vy - vyf])#target velocities where
     #initial delta v
@@ -81,17 +84,19 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     return total_mass_change
 
 
-def residuals(p, r0, m0, T, Isp, mu=398600.4415):
+def residuals(p, r0, m1, T, Isp, mu=398600.4415):
     # P is is free vector
     vx0, vy0, tof, DVx, DVy = p
     # propagate the 5-state + STM
     state0 = np.hstack((r0, [vx0, vy0, m0]))
-    traj, _ = low_thrust_propagator(state0, tof, T, Isp, mu)   # your routine
+    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1)   # your routine
     xf, yf, vxf, vyf, _ = traj[:5, -1]
+    initr2 = 12000
+    initv2, steps = np.sqrt(mu/initr2), 1000
 
-    target_traj, times = keplerian_propagator(initr2, initv2,tof, steps)
+    target_traj, times = keplerian_propagator([initr2,0.0], [0.0,initv2],tof, steps)
 
-
+    target = target_traj[0:4,-1]
     vxf += DVx
     vyf += DVy
     # final velocity including thrust is already in traj, no Δv column now
@@ -101,14 +106,14 @@ def residuals(p, r0, m0, T, Isp, mu=398600.4415):
                   vyf - target[3]])
     return F
 
-def jacobian(p, r0, m0, target, T, Isp, mu=398600.4415):
+def jacobian(p, r0, m1, T, Isp, mu=398600.4415):
     """
     Calculate the Jacobian matrix
     This jacobian should be the deriv of F wrt free variables
     """
     vx0, vy0, tof, DVx, DVy  = p
     state0 = np.hstack((r0, [vx0, vy0, m0]))
-    traj, _ = low_thrust_propagator(state0, tof, T, Isp, mu)
+    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1)
 
     # pull STM at t_f
     Phi = traj[5:, -1].reshape(5, 5)         # rows 5-29 are the 25 STM elements
@@ -131,6 +136,7 @@ def jacobian(p, r0, m0, target, T, Isp, mu=398600.4415):
     J[2,3]=1.0
     J[3, 4]=1.0
 
+    """
     stm = Phi
     # deriv of first row
     #what is the pupose of FX?
@@ -148,24 +154,67 @@ def jacobian(p, r0, m0, target, T, Isp, mu=398600.4415):
     FX[3,0:2] = stm[3,2:4]
     FX[3,2] = a_f[1]
     FX[3,4] = 1.0
+    """
     return J
 
-def constraint_fun(p, r0, m0, target, T, Isp, mu):
+def constraint_fun(p):
     """Return the 4-vector F that must be zero at the optimum."""
-    return residuals(p, r0, m0, target, T, Isp, mu=mu)
+    r0 = 7000
+    m0=1000
+    T=0.5
+    Isp=3000
+    mu=398600.0
+    vx0, vy0, tof, DVx, DVy = p[:5]
+    DV1=np.array([DVx, DVy])
+    #initial delta v
+    DV1_mag = np.linalg.norm(DV1)
+    g0 = 9.80665
+    m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
+    return residuals(p, r0, m1, T, Isp, mu)
 
-def constraint_jac(p, r0, m0, target, T, Isp, mu):
-    return jacobian(p, r0, m0, target, T, Isp, mu=mu)
+def constraint_jac(p):
+    r0 = 7000
+    m0=1000
+    T=0.5
+    Isp=3000
+    mu=398600.0
+    vx0, vy0, tof, DVx, DVy = p[:5]
+    DV1=np.array([DVx, DVy])
+    #initial delta v
+    DV1_mag = np.linalg.norm(DV1)
+    g0 = 9.80665
+    m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
+    return jacobian(p, r0, m1, T, Isp, mu)
+
 
 r0 = 7000
+r2 = 12000
 m0=1000
 T=0.5
 Isp=3000
 mu=398600.0
 
 #target, times = keplerian_propagator(initr2, initv2,2*np.pi*np.sqrt(r2**3/grav), integration_steps)
+#initial orbit values
+v1 = np.sqrt(mu/r0)
 
-initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
+#desired orbit velocity
+v2 = np.sqrt(mu/r2)
+
+#transfer orbit calculations
+semiaxis = (r0+r2)/2
+vTransferPeri = np.sqrt(mu*(2/r0 - 1/semiaxis))
+vTransferApo = np.sqrt(mu*(2/r0-1/semiaxis))
+Tof = np.pi*np.sqrt(semiaxis**3/mu)
+
+#deltav calculations
+
+delta_v1 = vTransferPeri - v1
+delta_v2 = v2 - vTransferApo
+free_vector = high_thrust_targeter(r0, 0, 0, v1+delta_v1, 0, -delta_v2, -r2, 0, 0, -v2, Tof)
+
+#initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
+initial_guess = free_vector
 
 plt.figure(figsize=(6, 4))  # Optional: customize the figure size
 plt.xlabel('X-axis')

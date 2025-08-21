@@ -10,7 +10,9 @@ def low_thrust_propagator_2D(init_r, init_v, tof, steps, isp, m0):
 
     # Array of time values
     tof_array = np.linspace(0,tof, num=steps)
-    init_state = np.append(init_r,np.append(init_v,m0))
+    init_stm = np.eye(5)
+    #init_state = np.append(init_r,np.append(init_v,m0))
+    init_state = np.concatenate((init_r,np.append(init_v,m0),init_stm.flatten()))
     # Do the integration
     sol = solve_ivp(fun = lambda t,x:low_thrust_eoms_STM(t,x,isp), t_span=tspan, y0=init_state, method="DOP853", t_eval=tof_array, rtol = 1e-12, atol = 1e-12)
 
