@@ -186,6 +186,37 @@ def constraint_jac(p):
     m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
     return jacobian(p, r0, m1, T, Isp, mu)
 
+def plot_hybrid_trajectory (r0, r2, LTtraj, r_vec):
+    
+    tof_array = np.linspace(0,2*np.pi, num=1000)
+    x0 = r0 *np.cos(tof_array)
+    y0 = r0 * np.sin(tof_array)
+    x2 = r2 * np.cos(tof_array)
+    y2 = r2 * np.sin(tof_array)
+
+    plt.figure(figsize=(7, 6))
+
+    plt.plot(x0, y0, 'k--', label='Initial Orbit')
+    plt.plot(x2, y2, 'b--', label='Target Orbit')
+    plt.plot(LTtraj[0], LTtraj[1], 'r', linewidth=2, label='Low-Thrust Arc')
+
+    plt.plot(r0_vec[0], r0_vec[1], 'go', markersize=10, label='Start Burn (Impulsive)')
+    plt.plot(LTtraj[0, -1], LTtraj[1, -1], 'mo', markersize=10, label='End Burn (Impulsive)')
+
+    plt.xlabel('X (km)')
+    plt.ylabel('Y (km)')
+    plt.axis('equal')
+    plt.grid(True)
+    plt.title('Hybrid Impulsive/Low-Thrust Transfer')
+    plt.legend(loc='best')
+    plt.show()
+
+
+
+
+
+
+
 
 r0 = 7000
 r2 = 12000
@@ -215,52 +246,21 @@ free_vector = high_thrust_targeter(r0, 0, 0, v1+delta_v1, 0, -delta_v2, -r2, 0, 
 
 #initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
 initial_guess = free_vector
-
-
-plt.figure(figsize=(6, 4))  # Optional: customize the figure size
-plt.xlabel('X-axis')
-plt.ylabel('Y-axis')
-
-plt.title('Empty x-y Axis')
-plt.grid(True)  #show grid
-
-# Define axis
-plt.show()
-
+#optimize
 sol=optimize_transfer(initial_guess, r0, m0, T, Isp, mu)
 print(sol)
 
-vx0, vy0, Tof, DVx, DVy = sol.x
-
+vx0, vy0, tof, DVx, DVy = sol.x
 DV1 = np.array([DVx, DVy])
 DV1_mag = np.linalg.norm(DV1)
-
 g0 = 9.80665
-
-# Initial state after first impulsive burn
-r0_vec = np.array([r0, 0.0])
-v0_vec = np.array([vx0, vy0]) + DV1
-
-# Mass after first burn
 m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
 
-# Propagate the low-thrust arc
+r0_vec = np.array([r0, 0.0])               # Starting position vector (x, y)
+v0_vec = np.array([vx0, vy0]) + DV1        # Velocity after impulsive burn
+
 LTtraj, LT_times = low_thrust_propagator_2D(r0_vec, v0_vec, tof, 1000, Isp, m1)
 
-# Define orbits for plotting
-theta = np.linspace(0, 2 * np.pi, 300)
-x_init_orbit = r0 * np.cos(theta)
-y_init_orbit = r0 * np.sin(theta)
-x_target_orbit = r2 * np.cos(theta)
-y_target_orbit = r2 * np.sin(theta)
 
-plt.figure(figsize=(7, 6))
-plt.plot(x_init_orbit, y_init_orbit, 'k--', label='Initial Orbit')
-plt.plot(x_target_orbit, y_target_orbit, 'b--', label='Target Orbit')
 
-# Low-thrust trajectory
-plt.plot(LTtraj[0], LTtraj, 'r', linewidth=2, label='Low-Thrust Arc')
-
-# Markers for impulsive burns
-plt.plot(r0_vec, r0_vec, 'go', markersize=10, label='Start Burn (Impulsive)')
-plt.plot(LTtraj[0, -1], LTtraj[1, -1], 'mo', markersize=10, label='End Burn (Impulsive)')
+plot_hybrid_trajectory(r0, r2, LTtraj, r0_vec)
