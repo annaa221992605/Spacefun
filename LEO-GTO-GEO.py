@@ -168,17 +168,17 @@ def constraint_jac(p):
     m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
     return jacobian(p, r0, m1, T, Isp, mu)
 
-def plot_hybrid_trajectory (r0, r2, LTtraj, HTtraj, r_vec):
+def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
     
     tof_array = np.linspace(0,2*np.pi, num=1000)
-    x0 = r0 *np.cos(tof_array)
-    y0 = r0 * np.sin(tof_array)
-    x2 = r2 * np.cos(tof_array) 
-    y2 = r2 * np.sin(tof_array)
+    x0 = r_LEO *np.cos(tof_array)
+    y0 = r_LEO * np.sin(tof_array)
+    x2 = r_GEO * np.cos(tof_array) 
+    y2 = r_GEO * np.sin(tof_array)
 
     #calculate 
 
-    plt.figure(figsize=(7, 6))
+    plt.figure(figsize=(8, 7))
 
     plt.plot(x0, y0, 'k--', label='Initial Orbit')
     plt.plot(x2, y2, 'b--', label='Target Orbit')
@@ -204,8 +204,8 @@ def plot_hybrid_trajectory (r0, r2, LTtraj, HTtraj, r_vec):
 
 
 
-r0 = 7000
-r2 = 12000
+r_LEO = 7000
+r_GEO = 42164
 m0=1000
 T=0.5
 Isp=3000
@@ -213,27 +213,44 @@ mu=398600.0
 
 #target, times = keplerian_propagator(initr2, initv2,2*np.pi*np.sqrt(r2**3/grav), integration_steps)
 #initial orbit values
-v1 = np.sqrt(mu/r0)
-
+v_LEO = np.sqrt(mu / r_LEO)
+init_pos_LEO = np.array([r_LEO, 0.0])
+init_vel_LEO = np.array([0.0, v_LEO])
 #desired orbit velocity
-v2 = np.sqrt(mu/r2)
+v2 = np.sqrt(mu/r_GEO)
 
 #transfer orbit calculations
-semiaxis = (r0+r2)/2
-vTransferPeri = np.sqrt(mu*(2/r0 - 1/semiaxis))
-vTransferApo = np.sqrt(mu*(2/r0-1/semiaxis))
-Tof = np.pi*np.sqrt(semiaxis**3/mu)
+a_GTO = (r_LEO+r_GEO)/2
+
+v_periapse_GTO = np.sqrt(mu * (2 / r_LEO - 1 / a_GTO))  # at LEO (periapsis) after burn
+GTO_tof = np.pi * np.sqrt(a_GTO ** 3 / mu)  #perigee to apogee time
+
+# (c) Post-burn state (GTO entry)
+init_vel_GTO = np.array([0.0, v_periapse_GTO])
+
+# (d) GTO propagation (High thrust/impulsive segment: LEO→GTO apogee)
+GTO_traj, GTO_times = keplerian_propagator(init_pos_LEO, init_vel_GTO, GTO_tof, gto_steps)
+final_GTO_pos = GTO_traj[:2, -1]       # r at GTO apogee (should be [r_GEO, ...])
+final_GTO_vel = GTO_traj[2:4, -1]      # v at GTO apogee
+
+# (a) Mass/State update after impulsive burn (can use rocket equation if desired)
+delta_v_GTO = v_periapse_GTO - v_LEO
+g0 = 9.80665
+m_after_GTO = m0 * np.exp(-delta_v_GTO / (Isp * g0))
+
+vTransferApo = np.sqrt(mu*(2/r_LEO-1/a_GTO))
+
 
 #deltav calculations
 
 delta_v1 = vTransferPeri - v1
 delta_v2 = v2 - vTransferApo
-free_vector = high_thrust_targeter(r0, 0, 0, v1+delta_v1, 0, -delta_v2, -r2, 0, 0, -v2, Tof)
+free_vector = high_thrust_targeter(r_LEO, 0, 0, v1+delta_v1, 0, -delta_v2, -r_GEO, 0, 0, -v2, Tof)
 
 #initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
 initial_guess = free_vector
 #optimize
-sol=optimize_transfer(initial_guess, r0, m0, T, Isp, mu)
+sol=optimize_transfer(initial_guess, r_LEO, m0, T, Isp, mu)
 print(sol)
 
 vx0, vy0, tof, DVx, DVy = sol.x
@@ -242,11 +259,11 @@ DV1_mag = np.linalg.norm(DV1)
 g0 = 9.80665
 m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
 
-r0_vec = np.array([r0, 0.0])               # Starting position vector (x, y)
+r0_vec = np.array([r_LEO, 0.0])               # Starting position vector (x, y)
 v0_vec = np.array([vx0, vy0]) + DV1        # Velocity after impulsive burn
 
-LTtraj, LT_times = low_thrust_propagator_2D(r0_vec, v0_vec, Tof, 1000, Isp, m1)
+LT_traj, LT_times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, LT_tof, 1000, Isp, m_after_GTO)#where should I get tof
 HTtraj, times = keplerian_propagator(r0_vec, v0_vec, tof, 1000)
 
 
-plot_hybrid_trajectory(r0, r2, LTtraj, HTtraj, r0_vec)
+plot_hybrid_trajectory(r_LEO, r_GEO, LTtraj, HTtraj, r0_vec)
