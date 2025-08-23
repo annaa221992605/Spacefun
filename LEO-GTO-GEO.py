@@ -45,7 +45,7 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     #hstack=horizontal
     #state0 = np.hstack((r0, [vx0, vy0, m0]))
 
-    LTtraj, times = low_thrust_propagator_2D([r0,0.0], v_after_dv1, tof, 1000, Isp, m1) #tof between the first burn and the second
+    LTtraj, times = low_thrust_propagator_2D([r_LEO,0.0], v_after_dv1, tof, 1000, Isp, m1, thrust) #tof between the first burn and the second
     #final mass on 4th row, last collumn
     m2 = LTtraj[4, -1]
     delta_m2 = m1-m2
@@ -89,7 +89,7 @@ def residuals(p, r0, m1, T, Isp, mu=398600.4415):
     vx0, vy0, tof, DVx, DVy = p
     # propagate the 5-state + STM
     state0 = np.hstack((r0, [vx0, vy0, m0]))
-    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1)   # your routine
+    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1, thrust)   # your routine
     xf, yf, vxf, vyf, _ = traj[:5, -1]
     initr2 = 12000
     initv2, steps = np.sqrt(mu/initr2), 1000
@@ -113,7 +113,7 @@ def jacobian(p, r0, m1, T, Isp, mu=398600.4415):
     """
     vx0, vy0, tof, DVx, DVy  = p
     state0 = np.hstack((r0, [vx0, vy0, m0]))
-    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1)
+    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1, thrust)
 
     # pull STM at t_f
     Phi = traj[5:, -1].reshape(5, 5)         # rows 5-29 are the 25 STM elements
@@ -176,18 +176,32 @@ def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
     x2 = r_GEO * np.cos(tof_array) 
     y2 = r_GEO * np.sin(tof_array)
 
+    print("LEO", r_LEO, "GEO", r_GEO)
+
+    # GTO ellipse for reference as dashed (peri = LEO, apo = GEO)
+    a_GTO = (r_LEO + r_GEO) / 2
+    b_GTO = np.sqrt(r_LEO * r_GEO)  # For a transfer ellipse (r_per, r_apo)
+
+    # Parametric ellipse (focus at center for simplicity—slight visual offset)
+    x_gto = a_GTO * np.cos(tof_array)
+    y_gto = b_GTO * np.sin(tof_array)
+
     #calculate 
 
     plt.figure(figsize=(8, 7))
 
-    plt.plot(x0, y0, 'k--', label='Initial Orbit')
-    plt.plot(x2, y2, 'b--', label='Target Orbit')
+    plt.plot(x0, y0, 'k--', label='LEO Orbit')
+    plt.plot(x2, y2, 'b--', label='GEO Orbit')
+    plt.plot(x_gto, y_gto, 'c--', linewidth=1.5, label='GTO Ellipse')
+
+    # High-thrust arc (GTOtraj): blue solid line
+    plt.plot(GTOtraj[0], GTOtraj[1], color='blue', linewidth=2, label='high-thrust')
     plt.plot(LTtraj[0], LTtraj[1], 'r', linewidth=2, label='Low-Thrust Arc')
 
-    plt.plot(r0_vec[0], r0_vec[1], 'go', markersize=10, label='Start Burn (Impulsive)')
+    plt.plot(GTOtraj[0,0], GTOtraj[1, 0], 'go', markersize=10, label='Start Burn (Impulsive)')
     plt.plot(LTtraj[0, -1], LTtraj[1, -1], 'mo', markersize=10, label='End Burn (Impulsive)')
 
-    plt.scatter(0, 0, color='red', s=6378, label='Centeral body')
+    plt.scatter(0, 0, color='red', s=100, label='Centeral body')
 
     plt.xlabel('X (km)')
     plt.ylabel('Y (km)')
@@ -204,12 +218,12 @@ def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
 
 
 
-r_LEO = 7000
+r_LEO = 6378+622
 r_GEO = 42164
 m0=1000
-T=0.5
 Isp=3000
 mu=398600.0
+thrust = 0.0005
 
 #target, times = keplerian_propagator(initr2, initv2,2*np.pi*np.sqrt(r2**3/grav), integration_steps)
 #initial orbit values
@@ -229,7 +243,7 @@ GTO_tof = np.pi * np.sqrt(a_GTO ** 3 / mu)  #perigee to apogee time
 init_vel_GTO = np.array([0.0, v_periapse_GTO])
 
 # (d) GTO propagation (High thrust/impulsive segment: LEO→GTO apogee)
-GTO_traj, GTO_times = keplerian_propagator(init_pos_LEO, init_vel_GTO, GTO_tof, gto_steps)
+GTO_traj, GTO_times = keplerian_propagator(init_pos_LEO, init_vel_GTO, GTO_tof, 1000)
 final_GTO_pos = GTO_traj[:2, -1]       # r at GTO apogee (should be [r_GEO, ...])
 final_GTO_vel = GTO_traj[2:4, -1]      # v at GTO apogee
 
@@ -243,14 +257,14 @@ vTransferApo = np.sqrt(mu*(2/r_LEO-1/a_GTO))
 
 #deltav calculations
 
-delta_v1 = vTransferPeri - v1
+delta_v1 = v_periapse_GTO - v_LEO
 delta_v2 = v2 - vTransferApo
-free_vector = high_thrust_targeter(r_LEO, 0, 0, v1+delta_v1, 0, -delta_v2, -r_GEO, 0, 0, -v2, Tof)
+free_vector = high_thrust_targeter(r_LEO, 0, 0, v_LEO+delta_v1, 0, -delta_v2, -r_GEO, 0, 0, -v2, GTO_tof)
 
 #initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
 initial_guess = free_vector
 #optimize
-sol=optimize_transfer(initial_guess, r_LEO, m0, T, Isp, mu)
+sol=optimize_transfer(initial_guess, r_LEO, m0, thrust, Isp, mu)
 print(sol)
 
 vx0, vy0, tof, DVx, DVy = sol.x
@@ -259,11 +273,16 @@ DV1_mag = np.linalg.norm(DV1)
 g0 = 9.80665
 m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
 
-r0_vec = np.array([r_LEO, 0.0])               # Starting position vector (x, y)
-v0_vec = np.array([vx0, vy0]) + DV1        # Velocity after impulsive burn
+r0_vec =  init_pos_LEO             # Starting position vector (x, y)
+v0_vec =  init_vel_GTO      # Velocity after impulsive burn
 
-LT_traj, LT_times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, LT_tof, 1000, Isp, m_after_GTO)#where should I get tof
+LT_tof = 30*24*3600 #do not leave like this
+
+LT_traj, LT_times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, LT_tof, 1000, Isp, m_after_GTO, thrust)#TOF should be optimized
 HTtraj, times = keplerian_propagator(r0_vec, v0_vec, tof, 1000)
 
+print("GTO_traj sample:", GTO_traj[0,:5], GTO_traj[1,:5])
+print("LT_traj sample:", LT_traj[0,:5], LT_traj[1,:5])
+print("LT_traj end:", LT_traj[0, -5:], LT_traj[1, -5:])
 
-plot_hybrid_trajectory(r_LEO, r_GEO, LTtraj, HTtraj, r0_vec)
+plot_hybrid_trajectory(r_LEO, r_GEO, LT_traj, HTtraj, r0_vec)

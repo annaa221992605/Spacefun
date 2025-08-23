@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 
-def low_thrust_propagator_2D(init_r, init_v, tof, steps, isp, m0):
+def low_thrust_propagator_2D(init_r, init_v, tof, steps, isp, m0, T):
     """
     Function to propagate a given orbit
     """
@@ -14,18 +14,18 @@ def low_thrust_propagator_2D(init_r, init_v, tof, steps, isp, m0):
     #init_state = np.append(init_r,np.append(init_v,m0))
     init_state = np.concatenate((init_r,np.append(init_v,m0),init_stm.flatten()))
     # Do the integration
-    sol = solve_ivp(fun = lambda t,x:low_thrust_eoms_STM(t,x,isp), t_span=tspan, y0=init_state, method="DOP853", t_eval=tof_array, rtol = 1e-12, atol = 1e-12)
+    sol = solve_ivp(fun = lambda t,x:low_thrust_eoms_STM(t,x,isp, T), t_span=tspan, y0=init_state, method="DOP853", t_eval=tof_array, rtol = 1e-12, atol = 1e-12)
 
     # Return everything
     return sol.y, sol.t
 
-def low_thrust_eoms_STM(t, state, isp):
+def low_thrust_eoms_STM(t, state, isp, T):
     """
     Equation of motion for 2body orbits
     """
     mu = 398600.441500000
-    g0 = 9.81
-    T = 1
+    g0 = 0.00981 #km/s
+    
     
     # Extract values from init
     x, y, vx, vy, m = state[:5]
