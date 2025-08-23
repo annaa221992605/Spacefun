@@ -18,7 +18,7 @@ def optimize_transfer(initial_guess, r0, m0, T, Isp, mu):#does the initial guess
                method='SLSQP', options={'ftol':1e-10, 'maxiter':100})
     return sol
 
-def obj_func(free_vector):#should there be a target array passed in - is the target values coming from shooting method
+def obj_func(free_vector, r_GEO = 42164):#should there be a target array passed in - is the target values coming from shooting method
     total_mass_change = 0
     # 1. Apply DV to the initial state
     # dv1 = difference using initial state
@@ -45,7 +45,7 @@ def obj_func(free_vector):#should there be a target array passed in - is the tar
     #hstack=horizontal
     #state0 = np.hstack((r0, [vx0, vy0, m0]))
 
-    LTtraj, times = low_thrust_propagator_2D([r_LEO,0.0], v_after_dv1, tof, 1000, Isp, m1, thrust) #tof between the first burn and the second
+    LTtraj, times = low_thrust_propagator_2D([r_LEO,0.0], v_after_dv1, tof, 1000, Isp, m1, thrust, r_GEO) #tof between the first burn and the second
     #final mass on 4th row, last collumn
     m2 = LTtraj[4, -1]
     delta_m2 = m1-m2
@@ -89,7 +89,7 @@ def residuals(p, r0, m1, T, Isp, mu=398600.4415):
     vx0, vy0, tof, DVx, DVy = p
     # propagate the 5-state + STM
     state0 = np.hstack((r0, [vx0, vy0, m0]))
-    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1, thrust)   # your routine
+    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1, thrust, r_GEO)   # your routine
     xf, yf, vxf, vyf, _ = traj[:5, -1]
     initr2 = 12000
     initv2, steps = np.sqrt(mu/initr2), 1000
@@ -113,7 +113,7 @@ def jacobian(p, r0, m1, T, Isp, mu=398600.4415):
     """
     vx0, vy0, tof, DVx, DVy  = p
     state0 = np.hstack((r0, [vx0, vy0, m0]))
-    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1, thrust)
+    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0, vy0], tof, 1000, Isp, m1, thrust, r_GEO)
 
     # pull STM at t_f
     Phi = traj[5:, -1].reshape(5, 5)         # rows 5-29 are the 25 STM elements
@@ -179,11 +179,13 @@ def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
     print("LEO", r_LEO, "GEO", r_GEO)
 
     # GTO ellipse for reference as dashed (peri = LEO, apo = GEO)
-    a_GTO = (r_LEO + r_GEO) / 2
-    b_GTO = np.sqrt(r_LEO * r_GEO)  # For a transfer ellipse (r_per, r_apo)
+    # Calculate eccentricity and focal distance
+    a_GTO = (r_LEO + r_GEO)/2
+    b_GTO = np.sqrt(r_LEO * r_GEO)
+    c = a_GTO - r_LEO  # distance from Earth's center (focus) to ellipse center
 
-    # Parametric ellipse (focus at center for simplicity—slight visual offset)
-    x_gto = a_GTO * np.cos(tof_array)
+# Parametric equations, centered at (−c, 0) so focus (Earth) is at (0, 0)
+    x_gto = a_GTO * np.cos(tof_array) - c
     y_gto = b_GTO * np.sin(tof_array)
 
     #calculate 
@@ -198,8 +200,9 @@ def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
     plt.plot(GTOtraj[0], GTOtraj[1], color='blue', linewidth=2, label='high-thrust')
     plt.plot(LTtraj[0], LTtraj[1], 'r', linewidth=2, label='Low-Thrust Arc')
 
-    plt.plot(GTOtraj[0,0], GTOtraj[1, 0], 'go', markersize=10, label='Start Burn (Impulsive)')
-    plt.plot(LTtraj[0, -1], LTtraj[1, -1], 'mo', markersize=10, label='End Burn (Impulsive)')
+    plt.plot(GTOtraj[0, 0], GTOtraj[1, 0], 'go', markersize=10, label='LEO Start')
+    plt.plot(final_GTO_pos[0], final_GTO_pos[1], 'bo', markersize=10, label='GTO Apogee / LT Start')
+    plt.plot(LTtraj[0, -1], LTtraj[1, -1], 'mo', markersize=10, label='End Burn (Low Thrust)')
 
     plt.scatter(0, 0, color='red', s=100, label='Centeral body')
 
@@ -210,11 +213,6 @@ def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
     plt.title('Hybrid Impulsive/Low-Thrust Transfer')
     plt.legend(loc='best')
     plt.show()
-
-
-
-
-
 
 
 
@@ -278,7 +276,7 @@ v0_vec =  init_vel_GTO      # Velocity after impulsive burn
 
 LT_tof = 30*24*3600 #do not leave like this
 
-LT_traj, LT_times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, LT_tof, 1000, Isp, m_after_GTO, thrust)#TOF should be optimized
+LT_traj, LT_times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, LT_tof, 1000, Isp, m_after_GTO, thrust, r_GEO)#TOF should be optimized
 HTtraj, times = keplerian_propagator(r0_vec, v0_vec, tof, 1000)
 
 print("GTO_traj sample:", GTO_traj[0,:5], GTO_traj[1,:5])
