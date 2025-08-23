@@ -134,7 +134,7 @@ def low_thrust_eoms(t, state, isp):
     earth_nu = 398600.441500000
     g0 = 9.81
     # Extract values from init
-    x, y, vx, vy, mass = state
+    x, y, vx, vy, mass = state[:5]
     r_dot = np.array([vx, vy])
     
     # Define r
