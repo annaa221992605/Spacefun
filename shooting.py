@@ -51,7 +51,7 @@ def high_thrust_targeter(x0, y0, xdot0, ydot0, DVx, DVy, xf, yf, xdotf, ydotf,to
 
         F = [final_x-xf, final_y-yf, actual_final_xdot - xdotf, actual_final_ydot - ydotf]
         print(np.linalg.norm(F))
-        if np.linalg.norm(F) > 1e-10:
+        if np.linalg.norm(F) > 1e-8:
             # FX = deriv of F wrt Free
             FX = np.zeros((4, 5))
             # deriv of first row

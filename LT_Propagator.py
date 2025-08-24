@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 
-def low_thrust_propagator_2D(init_r, init_v, tof, steps, isp, m0, T, r_GEO):
+def low_thrust_propagator_2D(init_r, init_v, tof, steps, isp, m0, T):
     """
     Function to propagate a given orbit
     """
@@ -14,12 +14,12 @@ def low_thrust_propagator_2D(init_r, init_v, tof, steps, isp, m0, T, r_GEO):
     #init_state = np.append(init_r,np.append(init_v,m0))
     init_state = np.concatenate((init_r,np.append(init_v,m0),init_stm.flatten()))
     # Do the integration
-    sol = solve_ivp(fun = lambda t,x:low_thrust_eoms_STM(t,x,isp, T, r_GEO), t_span=tspan, y0=init_state, method="DOP853", t_eval=tof_array, rtol = 1e-12, atol = 1e-12)
+    sol = solve_ivp(fun = lambda t,x:low_thrust_eoms_STM(t,x,isp, T), t_span=tspan, y0=init_state, method="DOP853", t_eval=tof_array, rtol = 1e-12, atol = 1e-12)
 
     # Return everything
     return sol.y, sol.t
 
-def low_thrust_eoms_STM(t, state, isp, T, r_GEO):
+def low_thrust_eoms_STM(t, state, isp, T):
     """
     Equation of motion for 2body orbits
     """
@@ -34,10 +34,10 @@ def low_thrust_eoms_STM(t, state, isp, T, r_GEO):
     v_dot = np.array([vx, vy])/v
 
     # w: smooth transition from 0 (all thrust in v_hat) to 1 (all thrust in -v_hat) as r approaches r_GEO
-    if r < r_GEO:
-        thrust_dir = v_dot  # thrust prograde (outwards)
-    else:
-        thrust_dir = -v_dot # thrust retrograde (braking)
+    #if r < r_GEO:
+    thrust_dir = v_dot  # thrust prograde (outwards)
+    #else:
+    #    thrust_dir = -v_dot # thrust retrograde (braking)
 
     gamma = T / m
 
