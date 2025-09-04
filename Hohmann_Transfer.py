@@ -41,17 +41,17 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
     print("---------------------------")
     #initial orbit propagrator
 
-    initr1=np.array([r1, 0, 0])
-    initv1=np.array([0, v1, 0])
+    initr1=np.array([r1, 0])
+    initv1=np.array([0, v1])
 
     isp = 19000
     m0 = 4.800
     #transfer Orbits initial values
-    init_r_transfer = np.array([r1, 0, 0])
-    init_v_transfer = np.array([0, vTransferPeri, 0])
+    init_r_transfer = np.array([r1, 0])
+    init_v_transfer = np.array([0, vTransferPeri])
 
     # Low thrust propagator
-    low_thrust_traj, times = low_thrust_propagator(init_r_transfer, init_v_transfer-[0.0,0.5,0.0], 10*Tof, integration_steps, isp, m0)
+    low_thrust_traj, times = low_thrust_propagator(init_r_transfer, init_v_transfer-[0.0,0.5], 10*Tof, integration_steps, isp, m0)
 
     # Pass initial guess to targetter
     # high_thrust_targeter(x0, y0, xdot0, ydot0, DVx, DVy, xf, yf, xdotf, ydotf,tof)
@@ -71,13 +71,22 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
 
     #target circular orbit propagation
 
-    initr2=np.array([-r2, 0, 0])
-    initv2 = np.array([0, v2, 0])
+    initr2=np.array([-r2, 0])
+    initv2 = np.array([0, v2])
     # Target Orbit
     traj2, times = keplerian_propagator(initr2, initv2,2*np.pi*np.sqrt(r2**3/grav), integration_steps)
 
-
-
+    fig, ax = plt.subplots()
+    ax.plot(traj1, traj1[1])
+    ax.plot(traj_transfer, traj_transfer[1])
+    ax.plot(low_thrust_traj, low_thrust_traj[1])
+    ax.plot(traj2, traj2[1])
+    #ax.scatter(, , color='red', s=100, label='Central body')
+    ax.set_xlabel("X-axis (km)")
+    ax.set_ylabel("Y-axis (km)")
+    plt.title("Hohmann Transfer (2D)")
+    plt.show()
+    """""
     # Plot it
     fig = plt.figure()
     # Define axes in that figure
@@ -107,9 +116,10 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
     ax.set_zlabel("Z-axis (km)")
     ax.xaxis.set_tick_params(labelsize=7)
     ax.yaxis.set_tick_params(labelsize=7)
-    ax.zaxis.set_tick_params(labelsize=7)
+    #ax.zaxis.set_tick_params(labelsize=7)
     ax.set_aspect('equal', adjustable='box')
     plt.show()
+    """
 
 def low_thrust_propagator(init_r, init_v, tof, steps, isp, m0):
     """

@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.integrate import solve_ivp
+from thrust_angle2 import pollard_law, compute_eccentricity
 
 def low_thrust_propagator_2D(init_r, init_v, tof, steps, isp, m0, T, r_GEO):
     """
@@ -27,17 +28,33 @@ def low_thrust_eoms_STM(t, state, isp, T, r_GEO):
     g0 = 0.00981 #km/s
     
     
+
     # Extract values from init
     x, y, vx, vy, m = state[:5]
-    r = np.hypot(x, y)
-    v = np.hypot(vx, vy)
-    v_dot = np.array([vx, vy])/v
+    #r = np.hypot(x, y)
+    #v = np.hypot(vx, vy)
+    #v_dot = np.array([vx, vy])/v
+
+    r_vec = np.array([x, y])
+    v_vec = np.array([vx, vy])
+    r = np.linalg.norm(r_vec)
+    v = np.linalg.norm(v_vec)
+
+    #thrust_dir = v_dot
+
+    # Compute current eccentricity
+    e = compute_eccentricity(r_vec, v_vec, mu)
+
+    # Compute thrust direction using Pollard law (tangent/radial mix)
+    thrust_dir = pollard_law(r_vec, v_vec, e)
+    thrust_dir = thrust_dir / np.linalg.norm(thrust_dir)   # make sure it's a unit vector
+
 
     # w: smooth transition from 0 (all thrust in v_hat) to 1 (all thrust in -v_hat) as r approaches r_GEO
-    if r < r_GEO:
-        thrust_dir = v_dot  # thrust prograde (outwards)
-    else:
-        thrust_dir = -v_dot # thrust retrograde (braking)
+    #if r < r_GEO:
+        #thrust_dir = v_dot  # thrust prograde (outwards)
+    #else:
+        #thrust_dir = -v_dot # thrust retrograde (braking)
 
     gamma = T / m
 

@@ -205,6 +205,9 @@ def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
     x_gto = a_GTO * np.cos(tof_array) - c
     y_gto = b_GTO * np.sin(tof_array)
 
+    print("LT Start:", LTtraj[:4,0])
+    print("LT End:", LTtraj[:4,-1])
+
     #calculate 
 
     plt.figure(figsize=(8, 7))
@@ -232,7 +235,7 @@ def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
     plt.show()
 
 def plot_mass_overtime(m0, m_after_impulse, LTtraj, LT_times, delta_v1_time=0):
-    """
+    """""
     Plot spacecraft mass over the entire mission:
        Instant drop for first impulsive burn,
        Continuous decrease for low-thrust segment.
@@ -249,15 +252,15 @@ def plot_mass_overtime(m0, m_after_impulse, LTtraj, LT_times, delta_v1_time=0):
         Time vector (seconds) matching columns of LTtraj
     delta_v1_time: 
         Time (seconds) at which impulsive burn occurs; typically 0, else can provide for future completeness.
-    """
+    """""
 
     # Segment 1: from t=0 to first burn
     t_burn = delta_v1_time / 86400  # convert to days (usually 0)
     t_LT_days = LT_times / 86400.0
 
     # Assemble full timeline and mass
-    times_days = np.concatenate([[0, t_burn], t_LT_days + t_burn])
-    mass_profile = np.concatenate([[m0, m_after_impulse], LTtraj[4, :]])
+    times_days = np.concatenate([ t_LT_days + t_burn])
+    mass_profile = np.concatenate([LTtraj[4, :]])
 
     plt.figure(figsize=(9, 5))
     plt.step(times_days, mass_profile, where='post', label='Total mass (kg)', color='b')
@@ -276,6 +279,13 @@ def plot_mass_overtime(m0, m_after_impulse, LTtraj, LT_times, delta_v1_time=0):
     print(f"Impulsive burn mass loss: {m0-m_after_impulse:.3f} kg")
     print(f"Low-thrust burn mass loss: {m_after_impulse-LTtraj[4,-1]:.3f} kg")
     print(f"Total mass used: {m0-LTtraj[4,-1]:.3f} kg")
+
+    radius = np.sqrt(LTtraj[0,:]**2 + LTtraj[1,:]**2)
+    plt.plot(LT_times, radius)
+    plt.xlabel("Time (s)")
+    plt.ylabel("Radius (km)")
+    plt.title("Radius over Low-Thrust Phase")
+    plt.show()
 
 
 
@@ -338,15 +348,25 @@ m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
 r0_vec =  init_pos_LEO             # Starting position vector (x, y)
 v0_vec =  init_vel_GTO      # Velocity after impulsive burn
 
-LT_tof = tof # get optimized TOF from solver
+LT_tof = 3000000 # get optimized TOF from solver
 
-LT_traj, LT_times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, LT_tof, 1000, Isp, m_after_GTO, thrust, r_GEO)#TOF should be optimized
+print("Low-Thrust Time of Flight (s):", LT_tof)
+
 HTtraj, times = keplerian_propagator(r0_vec, v0_vec, tof, 1000)
 
+print("Final GTO Position (km):", final_GTO_pos)
+print("Final GTO Velocity (km/s):", final_GTO_vel)
+
+LT_traj, LT_times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, LT_tof, 1000, Isp, m_after_GTO, thrust, r_GEO)#TOF should be optimized
+
+
+"""""
 print("GTO_traj sample:", GTO_traj[0,:5], GTO_traj[1,:5])
 print("LT_traj sample:", LT_traj[0,:5], LT_traj[1,:5])
 print("LT_traj end:", LT_traj[0, -5:], LT_traj[1, -5:])
-
+"""""
 plot_hybrid_trajectory(r_LEO, r_GEO, LT_traj, HTtraj, r0_vec)
 plot_mass_overtime(m0, m_after_GTO, LT_traj, LT_times)
 plt.show()
+
+
