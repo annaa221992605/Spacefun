@@ -7,23 +7,26 @@ from LT_Propagator import low_thrust_propagator_2D
 from scipy.optimize import minimize, NonlinearConstraint
 
 
-def optimize_transfer(initial_guess, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel):
+def optimize_transfer(initial_guess, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel):
     """
     function to opimize transfer
     """
     nlc = NonlinearConstraint(
-        lambda p: constraint_fun(p, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel),
+        lambda p: constraint_fun(p, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel),
         0.0, 0.0,
-        jac=lambda p: constraint_jac(p, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel)
+        jac=lambda p: constraint_jac(p, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel)
     )
+    def my_callback(xk):
+        print(f"Iteration callback: x = {xk}")
+
     sol = minimize(
-    lambda p: obj_func(p, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel),
-    initial_guess,
-    constraints=[nlc],
-    method='SLSQP', options={'ftol':1e-10, 'maxiter':100})
+        lambda p: obj_func(p, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel),
+        initial_guess,
+        constraints=[nlc],
+        method='SLSQP', callback=my_callback, options={'ftol':1e-8, 'maxiter':100})
     return sol
 
-def obj_func(free_vector, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel, r_GEO=42164):#should there be a target array passed in - is the target values coming from shooting method
+def obj_func(free_vector, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel, r_GEO=42164):#should there be a target array passed in - is the target values coming from shooting method
     total_mass_change = 0
     # 1. Apply DV to the initial state
     # dv1 = difference using initial state
@@ -41,23 +44,36 @@ def obj_func(free_vector, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel, r_GE
 
     g0 = 9.80665
 
-    m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
-    delta_m1= m0-m1
+    m1 = m0 * np.exp(-DV1_mag / (Isp_high * g0)) # Mass after 1st impulse
+    delta_m1= m0-m1 # change in mass
 
     # 2. Propagate the state using LT EOM
     # Gives delta m2
-
     #hstack=horizontal
     #state0 = np.hstack((r0, [vx0, vy0, m0]))
-
-    
-
 # Then use those as the initial state for low-thrust:
-    LTtraj, times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, tof, 1000, Isp, m1, thrust, r_GEO) #tof between the first burn and the second
+    LTtraj, times = low_thrust_propagator_2D([r0,0.0], [vx0,vy0], tof, 1000, Isp_low, m1, thrust) #tof between the first burn and the second
     #final mass on 4th row, last collumn
     m2 = LTtraj[4, -1]
     delta_m2 = m1-m2
 
+    """
+    fig = plt.figure()
+    # Define axes in that figure
+    ax = plt.axes(projection='3d',computed_zorder=False)
+    #initial
+    ax.plot(LTtraj[0],LTtraj[1],LTtraj[2],zorder=5)
+    plt.title("Hohmann Transfer")
+    ax.set_xlabel("X-axis (km)")
+    ax.set_ylabel("Y-axis (km)")
+    ax.set_zlabel("Z-axis (km)")
+    ax.xaxis.set_tick_params(labelsize=7)
+    ax.yaxis.set_tick_params(labelsize=7)
+    ax.zaxis.set_tick_params(labelsize=7)
+    ax.set_aspect('equal', adjustable='box')
+    plt.show()
+    """
+        
     # 3. Get final state at target orbit
     # dv2 = difference in final states
 
@@ -69,17 +85,19 @@ def obj_func(free_vector, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel, r_GE
     
     # solve for m3_diff using rocket equation
 
-    target_r = np.array([r_GEO, 0.0])
-    target_v = np.array([0.0, np.sqrt(mu/r_GEO)])
-    target_traj, times = keplerian_propagator(target_r, target_v ,tof, 1000)
+    target_r = np.array([-r_GEO, 0.0])
+    target_v = np.array([0.0, -np.sqrt(mu/r_GEO)])
+    #target_traj, times = keplerian_propagator(target_r, target_v ,tof, 1000)
 
-    target_vx, target_vy = target_traj[2:4,-1] #where should I get this
+    #target_vx, target_vy = target_traj[2:4,-1] #where should I get this
+
+    target_vx, target_vy = target_v
 
     DV2=np.array([target_vx - vxf, target_vy - vyf])#target velocities where
     #initial delta v
     DV2_mag = np.linalg.norm(DV2)#pythagorean thoerem
 
-    mf_after = mf * np.exp(-DV2_mag / (Isp * g0)) #mf and m2 are the same (both 4, -1)
+    mf_after = mf * np.exp(-DV2_mag / (Isp_high * g0)) #mf and m2 are the same (both 4, -1)
     delta_m3 = mf - mf_after
 
     total_mass_change = delta_m1 + delta_m2 + delta_m3
@@ -95,31 +113,34 @@ def obj_func(free_vector, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel, r_GE
     return total_mass_change
 
 
-def residuals(p,r0, m1, T, Isp, mu,final_GTO_pos, final_GTO_vel, r_GEO=42164):
+def residuals(p,r0, m1, T, Isp_low, Isp_high, mu,final_GTO_pos, final_GTO_vel, r_GEO=42164):
     # P is is free vector
     vx0, vy0, tof, DVx, DVy = p
     # propagate the 5-state + STM
 
-    traj, _ = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, tof, 1000, Isp, m1, thrust, r_GEO)
+    #traj, _ = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, tof, 1000, Isp, m1, thrust)
+
+    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0,vy0], tof, 1000, Isp_low, m1, thrust)
     xf, yf, vxf, vyf, _ = traj[:5, -1]
+
     #initr2 = 12000
     #initv2, steps = np.sqrt(mu/initr2), 1000
 
-    target_r = np.array([r_GEO, 0.0])
-    target_v = np.array([0.0, np.sqrt(mu / r_GEO)])
-    target_traj, _ = keplerian_propagator(target_r, target_v, tof, 1000)
+    target_r = np.array([-r_GEO, 0.0])
+    target_v = np.array([0.0, -np.sqrt(mu / r_GEO)])
+    #target_traj, _ = keplerian_propagator(target_r, target_v, tof, 1000)
 
-    target = target_traj[0:4,-1]
+    #target = target_traj[0:4,-1]
     vxf += DVx
     vyf += DVy
     # final velocity including thrust is already in traj, no Δv column now
-    F = np.array([xf - target[0],
-                  yf - target[1],
-                  vxf - target[2],
-                  vyf - target[3]])
+    F = np.array([xf - target_r[0],
+                  yf - target_r[1],
+                  vxf - target_v[0],
+                  vyf - target_v[1]])
     return F
 
-def jacobian(p,r0, m1, T, Isp, mu,final_GTO_pos, final_GTO_vel, r_GEO=42164):
+def jacobian(p,r0, m1, T, Isp_low, Isp_high, mu,final_GTO_pos, final_GTO_vel, r_GEO=42164):
     """
     Calculate the Jacobian matrix
     This jacobian should be the deriv of F wrt free variables
@@ -127,10 +148,7 @@ def jacobian(p,r0, m1, T, Isp, mu,final_GTO_pos, final_GTO_vel, r_GEO=42164):
     vx0, vy0, tof, DVx, DVy  = p
     state0 = np.hstack((r0, [vx0, vy0, m0]))
 
-
-    
-
-    traj, _ = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, tof, 1000, Isp, m1, thrust, r_GEO)
+    traj, _ = low_thrust_propagator_2D([r0,0.0], [vx0,vy0], tof, 1000, Isp_low, m1, thrust)
 
     # pull STM at t_f
     Phi = traj[5:, -1].reshape(5, 5)         # rows 5-29 are the 25 STM elements
@@ -156,36 +174,44 @@ def jacobian(p,r0, m1, T, Isp, mu,final_GTO_pos, final_GTO_vel, r_GEO=42164):
    
     return J
 
-def constraint_fun(p, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel):
+def constraint_fun(p, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel):
     """Return the 4-vector F that must be zero at the optimum."""
     r0 = 7000
-    m0=1000
-    T=0.5
-    Isp=3000
-    mu=398600.0
+    T = 0.0005
+    mu = 398600.0
+    v_LEO = np.sqrt(mu / r_LEO)
     vx0, vy0, tof, DVx, DVy = p[:5]
-    DV1=np.array([DVx, DVy])
+
+    init_pos_LEO = np.array([r0, 0.0])
+    init_vel_LEO = np.array([0.0, v_LEO])
+
+
+    DV1=np.array([vx0-init_vel_LEO[0], vy0-init_vel_LEO[1]])
     #initial delta v
     DV1_mag = np.linalg.norm(DV1)
     g0 = 9.80665
-    m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
-    return residuals(p, r0, m1, T, Isp, mu, final_GTO_pos, final_GTO_vel)
+    m1 = m0 * np.exp(-DV1_mag / (Isp_high * g0))
+    return residuals(p, r0, m1, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel)
 
-def constraint_jac(p, r0, m0, T, Isp, mu, final_GTO_pos, final_GTO_vel):
+def constraint_jac(p, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel):
     r0 = 7000
-    m0=1000
-    T=0.5
-    Isp=3000
-    mu=398600.0
+    T = 0.0005
+    mu = 398600.0
+    v_LEO = np.sqrt(mu / r_LEO)
     vx0, vy0, tof, DVx, DVy = p[:5]
-    DV1=np.array([DVx, DVy])
+
+    init_pos_LEO = np.array([r0, 0.0])
+    init_vel_LEO = np.array([0.0, v_LEO])
+
+
+    DV1=np.array([vx0-init_vel_LEO[0], vy0-init_vel_LEO[1]])
     #initial delta v
     DV1_mag = np.linalg.norm(DV1)
     g0 = 9.80665
-    m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
-    return jacobian(p, r0, m1, T, Isp, mu, final_GTO_pos, final_GTO_vel)
+    m1 = m0 * np.exp(-DV1_mag / (Isp_high * g0))
+    return jacobian(p, r0, m1, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel)
 
-def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
+def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj,LT_tof):
     
     tof_array = np.linspace(0,2*np.pi, num=1000)
     x0 = r_LEO *np.cos(tof_array)
@@ -217,11 +243,11 @@ def plot_hybrid_trajectory (r_LEO, r_GEO, LTtraj, GTOtraj, r_vec):
     plt.plot(x_gto, y_gto, 'c--', linewidth=1.5, label='GTO Ellipse')
 
     # High-thrust arc (GTOtraj): blue solid line
-    plt.plot(GTOtraj[0], GTOtraj[1], color='blue', linewidth=2, label='high-thrust')
+    #plt.plot(GTOtraj[0], GTOtraj[1], color='blue', linewidth=2, label='high-thrust')
     plt.plot(LTtraj[0], LTtraj[1], 'r', linewidth=2, label='Low-Thrust Arc')
 
-    plt.plot(GTOtraj[0, 0], GTOtraj[1, 0], 'go', markersize=10, label='LEO Start')
-    plt.plot(final_GTO_pos[0], final_GTO_pos[1], 'bo', markersize=10, label='GTO Apogee / LT Start')
+    #plt.plot(GTOtraj[0, 0], GTOtraj[1, 0], 'go', markersize=10, label='LEO Start')
+    #plt.plot(final_GTO_pos[0], final_GTO_pos[1], 'bo', markersize=10, label='GTO Apogee / LT Start')
     plt.plot(LTtraj[0, -1], LTtraj[1, -1], 'mo', markersize=10, label='End Burn (Low Thrust)')
 
     plt.scatter(0, 0, color='red', s=100, label='Centeral body')
@@ -262,10 +288,11 @@ def plot_mass_overtime(m0, m_after_impulse, LTtraj, LT_times, delta_v1_time=0):
     times_days = np.concatenate([ t_LT_days + t_burn])
     mass_profile = np.concatenate([LTtraj[4, :]])
 
-    plt.figure(figsize=(9, 5))
-    plt.step(times_days, mass_profile, where='post', label='Total mass (kg)', color='b')
-    plt.xlabel('Time (days)')
-    plt.ylabel('Spacecraft Mass (kg)')
+    fig = plt.figure()
+    ax = plt.axes()
+    ax.plot(times_days, mass_profile, label='Total mass (kg)', color='b')
+    ax.set_xlabel('Time (days)')
+    ax.set_ylabel('Spacecraft Mass (kg)')
     plt.title('Mission Mass: Impulsive Burn + Low-Thrust Transfer')
 
     # Annotate burns
@@ -276,8 +303,8 @@ def plot_mass_overtime(m0, m_after_impulse, LTtraj, LT_times, delta_v1_time=0):
     plt.show()
 
     # print total mass used for both phases
-    print(f"Impulsive burn mass loss: {m0-m_after_impulse:.3f} kg")
-    print(f"Low-thrust burn mass loss: {m_after_impulse-LTtraj[4,-1]:.3f} kg")
+    print(f"Impulsive burn mass loss: {m0-m1:.3f} kg")
+    print(f"Low-thrust burn mass loss: {m1-LTtraj[4,-1]:.3f} kg")
     print(f"Total mass used: {m0-LTtraj[4,-1]:.3f} kg")
 
     radius = np.sqrt(LTtraj[0,:]**2 + LTtraj[1,:]**2)
@@ -288,12 +315,11 @@ def plot_mass_overtime(m0, m_after_impulse, LTtraj, LT_times, delta_v1_time=0):
     plt.show()
 
 
-
-
 r_LEO = 6378+622
 r_GEO = 42164
-m0=1000
-Isp=3000
+m0=500
+Isp_low = 1500
+Isp_high = 350
 mu=398600.0
 thrust = 0.0005
 
@@ -322,7 +348,7 @@ final_GTO_vel = GTO_traj[2:4, -1]      # v at GTO apogee
 # (a) Mass/State update after impulsive burn (can use rocket equation if desired)
 delta_v_GTO = v_periapse_GTO - v_LEO
 g0 = 9.80665
-m_after_GTO = m0 * np.exp(-delta_v_GTO / (Isp * g0))
+m_after_GTO = m0 * np.exp(-delta_v_GTO / (Isp_high * g0))
 
 vTransferApo = np.sqrt(mu*(2/r_LEO-1/a_GTO))
 
@@ -331,28 +357,37 @@ vTransferApo = np.sqrt(mu*(2/r_LEO-1/a_GTO))
 
 delta_v1 = v_periapse_GTO - v_LEO
 delta_v2 = v2 - vTransferApo
-free_vector = high_thrust_targeter(r_LEO, 0, 0, v_LEO+delta_v1, 0, -delta_v2, -r_GEO, 0, 0, -v2, GTO_tof)
+free_vector = high_thrust_targeter(r_LEO, 0, 0, v_LEO+delta_v1, 0, -delta_v2, -r_GEO, 0, 0, -v2, 11*GTO_tof)
 
 #initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
 initial_guess = free_vector
+
+# Changing guess
+initial_guess[1] -= 0.5
+initial_guess[4] += 0.5
+
+
 #optimize
-sol=optimize_transfer(initial_guess, r_LEO, m0, thrust, Isp, mu, final_GTO_pos, final_GTO_vel)
+sol=optimize_transfer(initial_guess, r_LEO, m0, thrust, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel)
 print(sol)
 
 vx0, vy0, tof, DVx, DVy = sol.x
-DV1 = np.array([DVx, DVy])
+
+DV1=np.array([vx0-init_vel_LEO[0], vy0-init_vel_LEO[1]])
 DV1_mag = np.linalg.norm(DV1)
 g0 = 9.80665
-m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
+m1 = m0 * np.exp(-DV1_mag / (Isp_high * g0))
 
 r0_vec =  init_pos_LEO             # Starting position vector (x, y)
-v0_vec =  init_vel_GTO      # Velocity after impulsive burn
+v0_vec =  [vx0, vy0]      # Velocity after impulsive burn
 
 LT_tof = 3000000 # get optimized TOF from solver
 
 print("Low-Thrust Time of Flight (s):", LT_tof)
 
 HTtraj, times = keplerian_propagator(r0_vec, v0_vec, tof, 1000)
+LT_traj, LT_times = low_thrust_propagator_2D(r0_vec, v0_vec, LT_tof, 1000, Isp_low, m1, thrust)#TOF should be optimized
+GTO_traj, times = keplerian_propagator(r0_vec, [0.0,v_periapse_GTO], tof, 1000)
 
 print("Final GTO Position (km):", final_GTO_pos)
 print("Final GTO Velocity (km/s):", final_GTO_vel)
