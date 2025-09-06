@@ -51,7 +51,7 @@ def hohmannTransfer(r1, r2, grav = 398600.4418):
     init_v_transfer = np.array([0, vTransferPeri])
 
     # Low thrust propagator
-    low_thrust_traj, times = low_thrust_propagator(init_r_transfer, init_v_transfer-[0.0,0.5], 10*Tof, integration_steps, isp, m0)
+    low_thrust_traj, times = low_thrust_propagator(init_r_transfer, init_v_transfer, Tof, integration_steps, isp, m0)
 
     # Pass initial guess to targetter
     # high_thrust_targeter(x0, y0, xdot0, ydot0, DVx, DVy, xf, yf, xdotf, ydotf,tof)

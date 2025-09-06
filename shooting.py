@@ -15,6 +15,13 @@ def high_thrust_targeter(x0, y0, xdot0, ydot0, DVx, DVy, xf, yf, xdotf, ydotf,to
         # propagate initial state
         traj1, times =  keplerian_propagator_with_STM(init_state[0:2], free_vector[0:2], free_vector[2], integration_steps)
 
+        traj1 = np.array(traj1)
+
+
+        if traj1.ndim == 1:
+        # Assume data should be shaped (Nrows, Ncols=1)
+            traj1 = traj1.reshape((-1, 1))
+
         final_x = traj1[0,-1]
         final_y = traj1[1,-1]
         final_xdot = traj1[2,-1]
