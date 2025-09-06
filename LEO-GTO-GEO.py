@@ -27,40 +27,69 @@ def optimize_transfer(initial_guess, r0, m0, T, Isp_low, Isp_high, mu, r_GEO):
     return sol
 
 def obj_func(free_vector, r0, m0, T, Isp_low, Isp_high, mu, r_GEO=42164):#should there be a target array passed in - is the target values coming from shooting method
-    total_mass_change = 0
-    # 1. Apply DV to the initial state
-    # dv1 = difference using initial state
-    # solve for m1_diff using rocket equation
+    vx0, vy0, tof, DVx, DVy = free_vector[:5]
+
+    DV1=np.array([DVx, DVy])
+    #initial delta v
+    DV1_mag = np.linalg.norm(DV1)
+
+    v0 = np.array([vx0, vy0])         # Pre-burn velocity
+    v_after_dv1 = v0 + DV1
+
+    g0 = 9.80665
+
+    m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
+    delta_m1= m0-m1
+
+    # 2. Propagate the state using LT EOM
+    # Gives delta m2
+
+    #hstack=horizontal
+    #state0 = np.hstack((r0, [vx0, vy0, m0]))
+
     
-    vx0, vy0, tof_lt = free_vector[:3]  # Only optimize these for this scenario
 
-    g0 = 9.80665  # m/s^2
+# Then use those as the initial state for low-thrust:
+    LTtraj, times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, tof, 1000, Isp, m1, thrust, r_GEO) #tof between the first burn and the second
+    #final mass on 4th row, last collumn
+    m2 = LTtraj[4, -1]
+    delta_m2 = m1-m2
 
-    # Initial state in LEO
-    init_pos_LEO = np.array([r0, 0.0])
-    init_vel_LEO = np.array([vx0, vy0])
+    # 3. Get final state at target orbit
+    # dv2 = difference in final states
 
-    # Step 1: Low-thrust propagation from LEO to GTO apogee
-    LT_traj, times = low_thrust_propagator_2D(
-        init_pos_LEO, init_vel_LEO, tof_lt, 1000, Isp_low, m0, T, r_GEO
-    )
-    # State at end of low thrust (GTO apogee)
-    x_ap, y_ap, vx_ap, vy_ap, m_ap = LT_traj[0,-1], LT_traj[1,-1], LT_traj[2,-1], LT_traj[3,-1], LT_traj[4,-1]
+    #setting mf = to the mass after second burn
+    xf, yf, vxf, vyf, mf = LTtraj[0, -1], LTtraj[1, -1], LTtraj[2, -1], LTtraj[3,-1], LTtraj[4,-1] #-1 is the last column (if steps=1000, last column will be 1000)
 
-    # Step 2: High-thrust circularization burn at GTO apogee to GEO
-    v_circ_geo = np.sqrt(mu / r_GEO)
-    vvec_ap = np.array([vx_ap, vy_ap])
-    vvec_geo = np.array([0.0, v_circ_geo])  # GEO is circular, prograde y only
 
-    dV_vec = vvec_geo - vvec_ap
-    dV_mag = np.linalg.norm(dV_vec)
-    m_final = m_ap * np.exp(-dV_mag / (Isp_high * g0))
-    delta_m_HT = m_ap - m_final#mass of propellant used during the high-thrust (HT) circularization burn at GTO apogee
+    #whats the target?
+    
+    # solve for m3_diff using rocket equation
 
-    # Total mass change: loss during low-thrust + final high-thrust
-    total_mass_change = m0 - m_final
+    target_r = np.array([r_GEO, 0.0])
+    target_v = np.array([0.0, np.sqrt(mu/r_GEO)])
+    target_traj, times = keplerian_propagator(target_r, target_v ,tof, 1000)
+
+    target_vx, target_vy = target_traj[2:4,-1] #where should I get this
+
+    DV2=np.array([target_vx - vxf, target_vy - vyf])#target velocities where
+    #initial delta v
+    DV2_mag = np.linalg.norm(DV2)#pythagorean thoerem
+
+    mf_after = mf * np.exp(-DV2_mag / (Isp * g0)) #mf and m2 are the same (both 4, -1)
+    delta_m3 = mf - mf_after
+
+    total_mass_change = delta_m1 + delta_m2 + delta_m3
+    """
+    Example way
+    vx0, vy0, tof, DVx, DVy = p
+    r0, m0, T, Isp, mu = args
+    state0 = np.hstack((r0, [vx0, vy0, m0]))
+    traj, _ = propagate_low_thrust(state0, tof, T, Isp, mu)
+    m_f = traj[4, -1]
+    """
+
     return total_mass_change
-    
 
 
 def residuals(p,r0, m0, T, Isp_low, Isp_high, mu, r_GEO=42164):
