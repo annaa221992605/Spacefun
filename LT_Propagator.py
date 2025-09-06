@@ -24,7 +24,7 @@ def low_thrust_eoms_STM(t, state, isp, T):
     Equation of motion for 2body orbits
     """
     mu = 398600.441500000
-    g0 = 0.00981 #km/s
+    g0 = 9.81 #m/s
     
     
     # Extract values from init
@@ -39,12 +39,12 @@ def low_thrust_eoms_STM(t, state, isp, T):
     #else:
     #    thrust_dir = -v_dot # thrust retrograde (braking)
 
-    gamma = T / m
+    gamma = (T / m) # km/s^2
 
     # ---- acceleration -----------------------------------------------------
     ax = -mu*x/r**3 + gamma * thrust_dir[0]
     ay = -mu*y/r**3 + gamma * thrust_dir[1]
-    mdot = -T / (isp * g0)
+    mdot = -T / (isp * g0) # kg/s [kgm/s^2 / s*m/s^2]
 
     # ---- Jacobian ---------------------------------------------------------
     A = np.zeros((5, 5))
