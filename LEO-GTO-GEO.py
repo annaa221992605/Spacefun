@@ -332,136 +332,95 @@ def plot_mass_overtime(m0, m_after_impulse, LTtraj, LT_times, delta_v1_time=0):
     plt.show()
 
 
+
+
+
 r_LEO = 6378+622
 r_GEO = 42164
-m0=500
-Isp_low = 1500
-Isp_high = 350
+m0=1000
+Isp=3000
 mu=398600.0
 thrust = 0.0005
+
 
 #target, times = keplerian_propagator(initr2, initv2,2*np.pi*np.sqrt(r2**3/grav), integration_steps)
 #initial orbit values
 v_LEO = np.sqrt(mu / r_LEO)
 init_pos_LEO = np.array([r_LEO, 0.0])
 init_vel_LEO = np.array([0.0, v_LEO])
-
-
-# --- Free variables for optimizer ---
-x0, y0 = r_LEO, 0
-vx0, vy0 = 0, v_LEO
-xf, yf = r_GEO, 0
-vx_f, vy_f = 0, np.sqrt(mu / r_GEO)
-tof_guess = (np.pi * np.sqrt(((r_LEO + r_GEO)/2)**3 / mu))  # Hohmann transfer time as a rough guess
-DVx, DVy = 0, 0  # for pure transfer
-
-# Use the high-thrust targeter for initial guess
-initial_guess = high_thrust_targeter(x0, y0, vx0, vy0, DVx, DVy, xf, yf, vx_f, vy_f, tof_guess)#should shooting method only be use for high thrust part?
-# --- Optimize ---
-sol = optimize_transfer(
-    initial_guess, r_LEO, m0, thrust, Isp_low, Isp_high, mu, r_GEO
-)
-print(sol)
-
-vx0, vy0, tof_lt = sol.x
-g0 = 9.80665
-
-# Low-thrust propagation: LEO to GTO apogee
-LT_traj, LT_times = low_thrust_propagator_2D(
-    init_pos_LEO, np.array([vx0, vy0]), tof_lt, 1000, Isp_low, m0, thrust, r_GEO
-)
-x_ap, y_ap, vx_ap, vy_ap, m_ap = LT_traj[0,-1], LT_traj[1,-1], LT_traj[2,-1], LT_traj[3,-1], LT_traj[4,-1]
-
-
-
 #desired orbit velocity
 v2 = np.sqrt(mu/r_GEO)
+
 
 #transfer orbit calculations
 a_GTO = (r_LEO+r_GEO)/2
 
+
 v_periapse_GTO = np.sqrt(mu * (2 / r_LEO - 1 / a_GTO))  # at LEO (periapsis) after burn
 GTO_tof = np.pi * np.sqrt(a_GTO ** 3 / mu)  #perigee to apogee time
 
+
 # (c) Post-burn state (GTO entry)
 init_vel_GTO = np.array([0.0, v_periapse_GTO])
+
 
 # (d) GTO propagation (High thrust/impulsive segment: LEO→GTO apogee)
 GTO_traj, GTO_times = keplerian_propagator(init_pos_LEO, init_vel_GTO, GTO_tof, 1000)
 final_GTO_pos = GTO_traj[:2, -1]       # r at GTO apogee (should be [r_GEO, ...])
 final_GTO_vel = GTO_traj[2:4, -1]      # v at GTO apogee
 
-# (a) Mass/State update after impulsive burn (can use rocket equation if desired)
-#delta_v_GTO = v_periapse_GTO - v_LEO
-#g0 = 9.80665
-#m_after_GTO = m0 * np.exp(-delta_v_GTO / (Isp_high * g0))
 
-#vTransferApo = np.sqrt(mu*(2/r_LEO-1/a_GTO))
+# (a) Mass/State update after impulsive burn (can use rocket equation if desired)
+delta_v_GTO = v_periapse_GTO - v_LEO
+g0 = 9.80665
+m_after_GTO = m0 * np.exp(-delta_v_GTO / (Isp * g0))
+
+
+vTransferApo = np.sqrt(mu*(2/r_LEO-1/a_GTO))
+
+
 
 
 #deltav calculations
 
-#delta_v1 = v_periapse_GTO - v_LEO
-#delta_v2 = v2 - vTransferApo
 
+delta_v1 = v_periapse_GTO - v_LEO
+delta_v2 = v2 - vTransferApo
+free_vector = high_thrust_targeter(r_LEO, 0, 0, v_LEO+delta_v1, 0, -delta_v2, -r_GEO, 0, 0, -v2, GTO_tof)
 
-v_LEO = np.sqrt(mu / r_LEO)       # km/s
-v_LEO_mps = v_LEO * 1000          # convert to m/s
-
-m_after_LEO = m0 * np.exp(-v_LEO_mps / (Isp_high * g0))
-
-v_GEO = np.sqrt(mu / r_GEO)
-a_thrust = (T * 1000) / m0  # convert kN to N
-
-tof_HT = (v_GEO - v_LEO) / a_thrust  # seconds
-
-
-free_vector = high_thrust_targeter (-r_Earth, 0, 0, 0, r_LEO, 0, 0, v_LEO,0, v_LEO, tof_HT)
 
 #initial_guess = [vx0, vy0, tof0, DVx0, DVy0]
 initial_guess = free_vector
-
-# Changing guess
-initial_guess[1] -= 0.5
-initial_guess[4] += 0.5
-
-
 #optimize
-sol=optimize_transfer(initial_guess, r_LEO, m0, thrust, Isp_low, Isp_high, mu,init_pos_LEO, init_vel_LEO)
+sol=optimize_transfer(initial_guess, r_LEO, m0, thrust, Isp, mu, final_GTO_pos, final_GTO_vel)
 print(sol)
 
-vx0, vy0, tof, DVx, DVy = sol.x
 
-DV1=np.array([vx0-init_vel_LEO[0], vy0-init_vel_LEO[1]])
+vx0, vy0, tof, DVx, DVy = sol.x
+DV1 = np.array([DVx, DVy])
 DV1_mag = np.linalg.norm(DV1)
 g0 = 9.80665
-m1 = m0 * np.exp(-DV1_mag / (Isp_high * g0))
+m1 = m0 * np.exp(-DV1_mag / (Isp * g0))
 
-r0_vec =  [0, 0]             # Starting position vector (x, y)
-v0_vec =  [vx0, vy0]      # Velocity after impulsive burn
 
-LT_tof = 3000000 # get optimized TOF from solver
+r0_vec =  init_pos_LEO             # Starting position vector (x, y)
+v0_vec =  init_vel_GTO      # Velocity after impulsive burn
 
-print("Low-Thrust Time of Flight (s):", LT_tof)
 
-LT_traj, LT_times = low_thrust_propagator_2D(init_pos_LEO, init_vel_LEO, LT_tof, 1000, Isp_low, m0, thrust, r_GEO)
+LT_tof = tof # get optimized TOF from solver
+
+
+LT_traj, LT_times = low_thrust_propagator_2D(final_GTO_pos, final_GTO_vel, LT_tof, 1000, Isp, m_after_GTO, thrust, r_GEO)#TOF should be optimized
 HTtraj, times = keplerian_propagator(r0_vec, v0_vec, tof, 1000)
-#TOF should be optimized
-#GTO_traj, times = keplerian_propagator(r0_vec, [0.0,v_periapse_GTO], tof, 1000)
-
-print("Final LEO Position (km):", init_pos_LEO)
-print("Final LEO Velocity (km/s):", init_vel_LEO)
-
-LT_traj, LT_times = low_thrust_propagator_2D(init_pos_LEO,init_vel_LEO, LT_tof, 1000, Isp_low, m_after_LEO, thrust, r_GEO)#TOF should be optimized
 
 
-"""""
 print("GTO_traj sample:", GTO_traj[0,:5], GTO_traj[1,:5])
 print("LT_traj sample:", LT_traj[0,:5], LT_traj[1,:5])
 print("LT_traj end:", LT_traj[0, -5:], LT_traj[1, -5:])
-"""""
-plot_hybrid_trajectory(r_LEO, r_GEO, LT_traj, HTtraj)
-plot_mass_overtime(m0, m_after_LEO, LT_traj, LT_times)
+
+
+plot_hybrid_trajectory(r_LEO, r_GEO, LT_traj, HTtraj, r0_vec)
+plot_mass_overtime(m0, m_after_GTO, LT_traj, LT_times)
 plt.show()
 
 
