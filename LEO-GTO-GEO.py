@@ -7,7 +7,7 @@ from LT_Propagator import low_thrust_propagator_2D
 from scipy.optimize import minimize, NonlinearConstraint
 
 
-def optimize_transfer(initial_guess, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel):
+def optimize_transfer(initial_guess, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel, iteration_obj_values):
     """
     function to opimize transfer
     """
@@ -16,8 +16,13 @@ def optimize_transfer(initial_guess, r0, m0, T, Isp_low, Isp_high, mu, final_GTO
         0.0, 0.0,
         jac=lambda p: constraint_jac(p, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel)
     )
+    #def my_callback(xk):
+        #print(f"Iteration callback: x = {xk}")
+
     def my_callback(xk):
-        print(f"Iteration callback: x = {xk}")
+        value = obj_func(xk, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel)
+        iteration_obj_values.append(value)
+        print(f"Iteration callback: x = {xk}, obj = {value}")
 
     sol = minimize(
         lambda p: obj_func(p, r0, m0, T, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel),
@@ -318,6 +323,71 @@ def plot_mass_overtime(DVx2, DVy2, m0, m1, LTtraj, LT_times, delta_v1_time=0):
     print(f"Impulsive burn mass loss 2: {LTtraj[4,-1]-mend:.3f} kg")
     print(f"Total mass used: {m0-mend:.3f} kg")
 
+def plot_mass_fraction_comparison(mass_final_highthrust, mass_final_hybrid, m0):
+    """
+    Plots a simple bar chart comparing delivered mass fraction for
+    High Thrust Only vs Hybrid transfer missions.
+
+    Parameters:
+    mass_final_highthrust (float): final spacecraft mass after high thrust transfer
+    mass_final_hybrid (float): final spacecraft mass after hybrid transfer
+    m0 (float): initial launch mass
+    """
+    mass_fracs = [
+        mass_final_highthrust / m0,
+        mass_final_hybrid / m0
+    ]
+    labels = ['High Thrust', 'Hybrid']
+
+    plt.figure(figsize=(6,4))
+    bars = plt.bar(labels, mass_fracs, color=['blue', 'red'])
+    plt.ylabel('Delivered Mass Fraction')
+    plt.title('High Thrust vs Hybrid: Mass Fraction Comparison')
+    for bar, val in zip(bars, mass_fracs):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2, height + 0.01,
+                 f'{val:.3f}', ha='center', va='bottom', fontsize=12)
+    plt.ylim(0, max(mass_fracs)*1.3)
+    plt.grid(True, axis='y', linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.show()
+
+def plot_tof_comparison(tof_hybrid, tof_lowthrust):
+    """
+    Plots a comparison of time of flight for Hybrid versus Low-Thrust-Only missions.
+
+    Parameters:
+    tof_hybrid (float): time of flight for hybrid transfer (in desired units, e.g., days)
+    tof_lowthrust (float): time of flight for low-thrust-only transfer (same units)
+    """
+    labels = ['Hybrid', 'Low Thrust Only']
+    tofs = [tof_hybrid, tof_lowthrust]
+
+    plt.figure(figsize=(6, 4))
+    bars = plt.bar(labels, tofs, color=['red', 'green'])
+    plt.ylabel('Time of Flight (days)')  # Change label unit as needed
+    plt.title('Time of Flight: Hybrid vs Low Thrust Only')
+
+    for bar, val in zip(bars, tofs):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2, height + (0.03 * max(tofs)),
+                 f'{val:.2f}', ha='center', va='bottom', fontsize=12)
+
+    plt.ylim(0, max(tofs) * 1.2)
+    plt.grid(True, axis='y', linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.show()
+
+def plot_optimization_progression(obj_values):
+    plt.figure(figsize=(7,4))
+    plt.plot(range(1, len(obj_values)+1), obj_values, marker='o')
+    plt.xlabel('Iteration')
+    plt.ylabel('Objective Value (Mass Loss)')
+    plt.title('Optimization Progression')
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.show()
+
 
 r_LEO = 6378+622 # km
 r_GEO = 42164 # km
@@ -381,7 +451,10 @@ print("Impulsive only mass burn: ", m0-m2)
 new_guess = initial_guess[1:]
 new_guess[1] = 7*GTO_tof
 #optimize
-sol=optimize_transfer(new_guess, r_LEO, m0, thrust, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel)
+
+iteration_obj_values = []
+
+sol=optimize_transfer(new_guess, r_LEO, m0, thrust, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel, iteration_obj_values)
 print(sol)
 
 vy0, tof, DVx, DVy = sol.x
@@ -406,4 +479,28 @@ print("LT_traj end:", LT_traj[0, -5:], LT_traj[1, -5:])
 
 plot_hybrid_trajectory(r_LEO, r_GEO, LT_traj,LT_tof)
 plot_mass_overtime(DVx, DVy, m0, m1, LT_traj, LT_times)
+
+p = sol.x
+
+hybrid_mass_loss = obj_func(p, r_LEO, m0, thrust, Isp_low, Isp_high, mu, final_GTO_pos, final_GTO_vel, r_GEO=42164)
+mass_final_hybrid = m0 - hybrid_mass_loss
+
+plot_mass_fraction_comparison(m2, mass_final_hybrid, m0)
+
+tof_lowthrust = 10 * GTO_tof  # or some value reasonable
+tof_lowthrust_days = tof_lowthrust / 86400.0  # Convert seconds to days
+
+pure_LT_traj, pure_LT_times = low_thrust_propagator_2D(init_pos_LEO, init_vel_LEO, tof_lowthrust, 1000, Isp_low, m0, thrust)
+
+tof_lowthrust_days = pure_LT_times[-1] / 86400.0  # End time of trajectory in days
+
+plot_tof_comparison(tof, tof_lowthrust)
+
+"""work to show progression of optimization of mass values over interation"""
+
+
+
+
+plot_optimization_progression(iteration_obj_values)
+
 plt.show()
