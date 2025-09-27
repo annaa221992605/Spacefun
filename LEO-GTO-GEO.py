@@ -299,19 +299,28 @@ def plot_mass_overtime(DVx2, DVy2, m0, m1, LTtraj, LT_times, delta_v1_time=0):
     times_days = np.concatenate([[0, t_burn], t_LT_days + t_burn])
     mass_profile = np.concatenate([[m0, m1], LTtraj[4, :]])
 
+
+    t_final = times_days[-1]  # or LT_tof/86400 if LT_tof is total seconds low-thrust segment
+
+# Append mass and timeline with a final "impulse drop"
+    
     # Solve for second burn
     dv2_mag = np.linalg.norm([DVx2, DVy2])
     mend = LTtraj[4,-1] * np.exp(-dv2_mag / (Isp_high * g0))
 
+    times_days_with_end = np.concatenate([times_days, [t_final]])
+    mass_profile_with_end = np.concatenate([mass_profile, [mend]])
+
     fig = plt.figure()
     ax = plt.axes()
-    ax.plot(times_days, mass_profile, label='Total mass (kg)', color='b')
+    ax.plot(times_days_with_end, mass_profile_with_end, label='Total mass (kg)', color='b')
     ax.set_xlabel('Time (days)')
     ax.set_ylabel('Spacecraft Mass (kg)')
     plt.title('Mission Mass: Impulsive Burn + Low-Thrust Transfer')
 
     # Annotate burns
-    plt.axvline(x=t_burn, color='red', linestyle='--', alpha=0.7, label='Impulsive Burn')
+    plt.axvline(x=t_burn, color='red', linestyle='--', alpha=0.7, label='First Impulsive Burn')
+    plt.axvline(x=t_final, color='red', linestyle='--', alpha=0.7, label='Second Impulsive Burn')
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
@@ -379,15 +388,55 @@ def plot_tof_comparison(tof_hybrid, tof_lowthrust):
     plt.show()
 
 def plot_optimization_progression(obj_values):
+
+    iterations = range(1, len(obj_values)+1)
+
     plt.figure(figsize=(7,4))
-    plt.plot(range(1, len(obj_values)+1), obj_values, marker='o')
+    
+    plt.plot(iterations, obj_values, marker='o')
     plt.xlabel('Iteration')
     plt.ylabel('Objective Value (Mass Loss)')
     plt.title('Optimization Progression')
     plt.grid(True, linestyle='--', alpha=0.5)
+
+    n_to_label = 10
+    for i in range(-n_to_label, 0):
+        idx = iterations[i]
+        val = obj_values[i]
+        plt.text(idx, val, f"{val:.6f}", ha='left', va='bottom', fontsize=5, color='blue')
+
     plt.tight_layout()
     plt.show()
 
+def plot_optimization_tail(obj_values, n=12):
+    # Get the last n values and corresponding iteration numbers
+    y_margin=0.0005
+
+    last_vals = obj_values[-n:]
+    last_iters = list(range(len(obj_values) - n + 1, len(obj_values) + 1))
+    plt.figure(figsize=(7,4))
+    plt.plot(last_iters, last_vals, marker='o')
+    for x, y in zip(last_iters, last_vals):
+        plt.text(x, y, f"{y:.6f}", ha='left', va='bottom', fontsize=9, color='blue')
+    plt.xlabel('Iteration')
+    plt.ylabel('Objective Value (Mass Loss)')
+    plt.title(f'Last {n} Optimization Iterations')
+    # Tight vertical zoom
+    min_y = min(last_vals)
+    max_y = max(last_vals)
+
+    delta_y = max_y - min_y
+    if delta_y == 0:
+        # Prevents error in case all values are identical
+        plt.ylim(min_y - y_margin, max_y + y_margin)
+    else:
+        plt.ylim(min_y - y_margin*delta_y, max_y + y_margin*delta_y)
+    
+    # Shrink x-axis to just fit the displayed data
+    plt.xlim(min(last_iters)-0.5, max(last_iters)+0.5)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.show()
 
 r_LEO = 6378+622 # km
 r_GEO = 42164 # km
@@ -499,8 +548,8 @@ plot_tof_comparison(tof, tof_lowthrust)
 """work to show progression of optimization of mass values over interation"""
 
 
-
-
 plot_optimization_progression(iteration_obj_values)
+
+plot_optimization_tail(iteration_obj_values, n=12)
 
 plt.show()
