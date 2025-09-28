@@ -536,14 +536,14 @@ mass_final_hybrid = m0 - hybrid_mass_loss
 
 plot_mass_fraction_comparison(m2, mass_final_hybrid, m0)
 
-tof_lowthrust = 10 * GTO_tof  # or some value reasonable
-tof_lowthrust_days = tof_lowthrust / 86400.0  # Convert seconds to days
+tof_lowthrust = 7 * GTO_tof  # or some value reasonable
+tof_lowthrust_days = tof_lowthrust/86400.0  # Convert seconds to days
 
 pure_LT_traj, pure_LT_times = low_thrust_propagator_2D(init_pos_LEO, init_vel_LEO, tof_lowthrust, 1000, Isp_low, m0, thrust)
 
-tof_lowthrust_days = pure_LT_times[-1] / 86400.0  # End time of trajectory in days
+tof_lowthrust_days = pure_LT_times[-1]/86400.0  # End time of trajectory in days
 
-plot_tof_comparison(tof, tof_lowthrust)
+plot_tof_comparison(tof/86400.0, tof_lowthrust_days)
 
 """work to show progression of optimization of mass values over interation"""
 
